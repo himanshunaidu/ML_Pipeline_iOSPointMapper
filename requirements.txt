@@ -1,0 +1,10 @@
+# Note: It is recommended to use the Conda environment file to install the following packages.
+# Works best with nvidia driver 470 (e.g. 470.256.02) and CUDA 11.8
+
+# Pytorch: pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+torchaudio
+
+# Package for generating requirements.txt
+pipreqs
