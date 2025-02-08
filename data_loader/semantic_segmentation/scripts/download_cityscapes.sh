@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-global_path='../../../vision_datasets'
+global_path='../../../datasets'
 data_dir=$global_path'/cityscapes'
 
 mkdir -p $data_dir
@@ -17,19 +17,12 @@ wget --load-cookies cookies.txt --content-disposition https://www.cityscapes-dat
 #wget --load-cookies cookies.txt --content-disposition https://www.cityscapes-dataset.com/file-handling/?packageID=2
 
 # Enter absolute path to the directory where the data is downloaded if you want to move the data to a different location
-data_dir='/path/to/data'
-mv gtCoarse.zip $data_dir
-mv gtFine_trainvaltest.zip $data_dir
-mv leftImg8bit_trainextra.zip $data_dir
-mv leftImg8bit_trainvaltest.zip $data_dir
+#unzip -q -o gtCoarse.zip 
+unzip -q -o gtFine_trainvaltest.zip
+#unzip -q -o leftImg8bit_trainextra.zip 
+unzip -q -o leftImg8bit_trainvaltest.zip
 
-# Enter absolute path to the directory where the data is downloaded if you want to move the data to a different location
-#unzip -q -o gtCoarse.zip # $data_dir/gtCoarse.zip
-unzip -q -o $data_dir/gtFine_trainvaltest.zip
-#unzip -q -o leftImg8bit_trainextra.zip # $data_dir/leftImg8bit_trainextra.zip
-unzip -q -o $data_dir/leftImg8bit_trainvaltest.zip
-
-#rm -rf gtCoarse.zip # $data_dir/gtCoarse.zip
-rm -rf $data_dir/gtFine_trainvaltest.zip
-#rm -rf leftImg8bit_trainextra.zip # $data_dir/leftImg8bit_trainextra.zip
-rm -rf $data_dir/leftImg8bit_trainvaltest.zip
+#rm -rf gtCoarse.zip 
+rm -rf gtFine_trainvaltest.zip
+#rm -rf leftImg8bit_trainextra.zip 
+rm -rf leftImg8bit_trainvaltest.zip
