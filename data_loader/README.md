@@ -1,6 +1,6 @@
 # Data Loader
 
-This data loader module takes heavy inspiration from [EdgeNets](https://github.com/sacmehta/EdgeNets.git), but lots of modifications are made to work with newer library versions. 
+This data loader module takes heavy inspiration from [EdgeNets](https://github.com/sacmehta/EdgeNets.git), but several modifications are made to work with newer library versions. 
 
 ## Modules
 
