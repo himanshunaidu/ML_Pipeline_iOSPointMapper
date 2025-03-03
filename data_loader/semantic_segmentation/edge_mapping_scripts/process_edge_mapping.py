@@ -6,10 +6,10 @@ The rgb images are stored in .png format. The depth images are stored in .npy fo
 It also contains geospatial information of the images in a .csv file. 
 
 The script processes the dataset to generate 3 splits: train, val, test.
-For each split, each image will have the following information:
-    - rgb image (rgb folder)
-    - depth image (depth folder)
-    - geospatial information (all stored in a single location.csv file)
+For each split, the script will save the rgb image paths, depth image paths and the geospatial information 
+    in single csv file.
+
+Note: The paths are saved relative to the dataset directory.
 """
 import os, glob, sys
 import numpy as np
@@ -46,7 +46,8 @@ def match_location_with_images(location_df, image_files,
     location_df = location_df[location_df[location_identifier_column].isin(image_names)]
     return location_df
 
-def save_split(split, rgb_files, depth_files, location_df, output_path):
+def get_split_info(split, rgb_files, depth_files, location_df, output_path,
+                   *, match_column = 'match_column', location_identifier_column = 'sys_time'):
     """
     Function to save the split information.
 
@@ -67,27 +68,26 @@ def save_split(split, rgb_files, depth_files, location_df, output_path):
     output_path: str
         Path to the output folder.
 
+    match_column: str
+        Column name in the rgb_files which identifies the image.
+
+    location_identifier_column: str
+        Column name in the location_df which identifies the image.
+
     Returns:
     -------
-    None
+    pd.DataFrame
+        Dataframe containing the split information.
+        Includes the rgb image paths, depth image paths and the geospatial information.
     """
-    split_path = os.path.join(output_path, split)
-    os.makedirs(split_path, exist_ok = True)
+    split_df = pd.DataFrame({'rgb': rgb_files, 'depth': depth_files})
 
-    # Save the image files
-    rgb_folder = os.path.join(split_path, 'rgb')
-    os.makedirs(rgb_folder, exist_ok = True)
-    for f in rgb_files:
-        os.system('cp {} {}'.format(f, rgb_folder))
-
-    # Save the depth files
-    depth_folder = os.path.join(split_path, 'depth')
-    os.makedirs(depth_folder, exist_ok = True)
-    for f in depth_files:
-        os.system('cp {} {}'.format(f, depth_folder))
-
-    # Save the location information
-    location_df.to_csv(os.path.join(split_path, 'location.csv'))
+    # Get the matching geospatial information
+    split_df[match_column] = split_df['rgb'].apply(lambda x: os.path.basename(x).split('_')[0])
+    split_df = split_df.merge(location_df, left_on = match_column, right_on = location_identifier_column, how = 'left')
+    split_df.drop(columns = [match_column], inplace = True)
+    
+    return split_df
 
 
 def main(dataset_path, folder_patterns, location_files, output_path, 
@@ -136,9 +136,11 @@ def main(dataset_path, folder_patterns, location_files, output_path,
     depth_files_path = os.path.join(dataset_path, 'depth', folder_patterns['depth'])
 
     rgb_files = glob.glob(rgb_files_path)
-    rgb_files = rgb_files[:10]
+    # Instead of using the paths relative to the current directory, we will use the paths relative to the dataset directory
+    rgb_files = [os.path.relpath(f, dataset_path) for f in rgb_files]
     depth_files = glob.glob(depth_files_path)
-    depth_files = depth_files[:10]
+    # Instead of using the paths relative to the current directory, we will use the paths relative to the dataset directory
+    depth_files = [os.path.relpath(f, dataset_path) for f in depth_files]
     print_info_message('{} rgb files found'.format(len(rgb_files)))
     print_info_message('{} depth files found'.format(len(depth_files)))
 
@@ -172,7 +174,10 @@ def main(dataset_path, folder_patterns, location_files, output_path,
                                                       [train_depth_files, val_depth_files, test_depth_files],
                                                       [train_location_df, val_location_df, test_location_df]):
         print_info_message('Processing {} split'.format(split))
-        save_split(split, files, depth_files, location_df, output_path)
+        output_csv_path = os.path.join(output_path, '{}.csv'.format(split))
+        split_df = get_split_info(split, files, depth_files, location_df, output_path)
+        split_df.to_csv(output_csv_path, index = False)
+        print_info_message('Saved {} split information at {}'.format(split, output_csv_path))
 
 
 if __name__=="__main__":
