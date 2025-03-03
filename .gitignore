@@ -3,6 +3,13 @@
 /data_loader/dump/
 /datasets/
 
+## Model
+/model/semantic_segmentation/model_zoo/espnetv2/*.pth
+
+## Results
+/results/*
+!/results/.gitkeep
+
 # Note: The following content has been pulled from https://github.com/jupyter/notebook
 *.bundle.*
 lib/
