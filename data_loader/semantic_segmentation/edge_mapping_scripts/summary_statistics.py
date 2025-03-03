@@ -9,9 +9,9 @@ if __name__ == '__main__':
 from utilities.print_utils import *
 
 def main(dataset_path):
-    folders = {'rgb': 'png', 'depth': 'npy'} # Dictionary format: {folder_name: file_extension}
-    for folder, extension in folders.items():
-        imageFiles = os.path.join(dataset_path, folder, '*.{}'.format(extension))
+    folders = {'rgb': '*_rgb.png', 'depth': '*_depth.npy'} # Dictionary format: {folder_name: file_matching_pattern}
+    for folder, match_format in folders.items():
+        imageFiles = os.path.join(dataset_path, folder, match_format)
         files = glob.glob(imageFiles)
         print_info_message('{} files found for {} split'.format(len(files), folder))
 
