@@ -147,7 +147,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    from commons.general_details import segmentation_models, segmentation_datasets
+    from config.general_details import segmentation_models, segmentation_datasets
 
     parser = ArgumentParser()
     # mdoel details
@@ -181,9 +181,9 @@ if __name__ == '__main__':
 
     # set-up results path
     if args.dataset == 'city':
-        args.savedir = '{}_{}_{}/results'.format('results', args.dataset, args.split)
+        args.savedir = 'results/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
-        args.savedir = '{}_{}/results/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
+        args.savedir = 'results/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
 
