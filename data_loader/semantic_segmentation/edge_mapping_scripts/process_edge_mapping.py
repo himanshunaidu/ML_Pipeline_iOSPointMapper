@@ -7,7 +7,7 @@ It also contains geospatial information of the images in a .csv file.
 
 The script processes the dataset to generate 3 splits: train, val, test.
 For each split, the script will save the rgb image paths, depth image paths and the geospatial information 
-    in single csv file.
+    All the information is saved in separate split folders, as well as csv files.
 
 Note: The paths are saved relative to the dataset directory.
 """
@@ -15,10 +15,21 @@ import os, glob, sys
 import numpy as np
 import pandas as pd
 import random
+from tqdm import tqdm
+import cv2
 from sklearn.model_selection import train_test_split
 if __name__ == '__main__':
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from utilities.print_utils import *
+
+def check_empty_img(img_path): 
+    # Reading Image 
+    # You can give path to the  
+    # image as first argument 
+    image = cv2.imread(img_path) 
+  
+    # Checking if the image is empty or not 
+    return image is None
 
 def match_location_with_images(location_df, image_files, 
                                *, location_identifier_column = 'sys_time'):
@@ -45,6 +56,43 @@ def match_location_with_images(location_df, image_files,
     image_names = [os.path.basename(f).split('_')[0] for f in image_files]
     location_df = location_df[location_df[location_identifier_column].isin(image_names)]
     return location_df
+
+def save_split(split, rgb_files, depth_files, location_df, output_path):
+    """
+    Function to save the split information.
+    Parameters:
+    ----------
+    split: str
+        Name of the split.
+    rgb_files: list
+        List of rgb image files.
+    depth_files: list
+        List of depth image files.
+    location_df: pd.DataFrame
+        Dataframe containing the geospatial information.
+    output_path: str
+        Path to the output folder.
+    Returns:
+    -------
+    None
+    """
+    split_path = os.path.join(output_path, split)
+    os.makedirs(split_path, exist_ok = True)
+
+    # Save the image files
+    rgb_folder = os.path.join(split_path, 'rgb')
+    os.makedirs(rgb_folder, exist_ok = True)
+    for f in rgb_files:
+        os.system('cp {} {}'.format(f, rgb_folder))
+
+    # Save the depth files
+    depth_folder = os.path.join(split_path, 'depth')
+    os.makedirs(depth_folder, exist_ok = True)
+    for f in depth_files:
+        os.system('cp {} {}'.format(f, depth_folder))
+
+    # Save the location information
+    location_df.to_csv(os.path.join(split_path, 'location.csv'))
 
 def get_split_info(split, rgb_files, depth_files, location_df, output_path,
                    *, match_column = 'match_column', location_identifier_column = 'sys_time'):
@@ -135,12 +183,18 @@ def main(dataset_path, folder_patterns, location_files, output_path,
     rgb_files_path = os.path.join(dataset_path, 'rgb', folder_patterns['rgb'])
     depth_files_path = os.path.join(dataset_path, 'depth', folder_patterns['depth'])
 
-    rgb_files = glob.glob(rgb_files_path)
-    # Instead of using the paths relative to the current directory, we will use the paths relative to the dataset directory
-    rgb_files = [os.path.relpath(f, dataset_path) for f in rgb_files]
+    rgb_files_temp = glob.glob(rgb_files_path)
+    # rgb_files = rgb_files[:100] # MARK: For testing
+    # Filter out empty images
+    rgb_files = []
+    for rgb_file in tqdm(rgb_files_temp, desc='Checking empty images'):
+        if not check_empty_img(rgb_file):
+            rgb_files.append(rgb_file)
+    print("Number of empty images: {}".format(len(rgb_files_temp) - len(rgb_files)))
+
     depth_files = glob.glob(depth_files_path)
-    # Instead of using the paths relative to the current directory, we will use the paths relative to the dataset directory
-    depth_files = [os.path.relpath(f, dataset_path) for f in depth_files]
+    # depth_files = depth_files[:100] # MARK: For testing
+
     print_info_message('{} rgb files found'.format(len(rgb_files)))
     print_info_message('{} depth files found'.format(len(depth_files)))
 
@@ -174,8 +228,17 @@ def main(dataset_path, folder_patterns, location_files, output_path,
                                                       [train_depth_files, val_depth_files, test_depth_files],
                                                       [train_location_df, val_location_df, test_location_df]):
         print_info_message('Processing {} split'.format(split))
+        
+        # Transfer the files to the output folder
+        save_split(split, files, depth_files, location_df, output_path)
+        print_info_message('Saved {} split at {}'.format(split, os.path.join(output_path, split)))
+        
+        # Save the csv file
         output_csv_path = os.path.join(output_path, '{}.csv'.format(split))
-        split_df = get_split_info(split, files, depth_files, location_df, output_path)
+        # Instead of using the paths relative to the current directory, we will use the paths relative to the dataset directory
+        data_files = [os.path.relpath(f, dataset_path) for f in files]
+        depth_data_files = [os.path.relpath(f, dataset_path) for f in depth_files]
+        split_df = get_split_info(split, data_files, depth_data_files, location_df, output_path)
         split_df.to_csv(output_csv_path, index = False)
         print_info_message('Saved {} split information at {}'.format(split, output_csv_path))
 

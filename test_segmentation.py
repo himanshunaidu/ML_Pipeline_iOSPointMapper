@@ -193,7 +193,7 @@ if __name__ == '__main__':
     if args.dataset == 'city':
         args.savedir = 'results/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-        args.savedir = 'results/{}_{}/{}'.format('results', args.dataset, 'NorthSeattle_1118')
+        args.savedir = 'results/{}_{}/{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
         args.savedir = 'results/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
     else:
