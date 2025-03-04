@@ -31,6 +31,7 @@ class ESPNetv2Segmentation(nn.Module):
         dec_feat_dict={
             'pascal': 16,
             'city': 16,
+            'edge_mapping': 16, # MARK: edge mapping dataset
             'coco': 32
         }
         base_dec_planes = dec_feat_dict[dataset]
