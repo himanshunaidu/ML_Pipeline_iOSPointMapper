@@ -73,6 +73,11 @@ def evaluate(args, model, image_list, device):
             # cityscape uses different IDs for training and testing
             # so, change from Train IDs to actual IDs
             img_out = relabel(img_out)
+        elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
+            # edge mapping dataset uses different IDs for training and testing
+            # so, change from Train IDs to actual IDs
+            # Same as cityscape dataset
+            img_out = relabel(img_out)
 
         img_out = Image.fromarray(img_out)
         # resize to original size
@@ -96,6 +101,11 @@ def main(args):
         image_list = glob.glob(image_path)
         from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST
         seg_classes = len(CITYSCAPE_CLASS_LIST)
+    elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
+        image_path = os.path.join(args.data_path, "rgb", "*.png")
+        image_list = glob.glob(image_path)
+        from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+        seg_classes = len(EDGE_MAPPING_CLASS_LIST)
     elif args.dataset == 'pascal':
         from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
         seg_classes = len(VOC_CLASS_LIST)
@@ -182,6 +192,8 @@ if __name__ == '__main__':
     # set-up results path
     if args.dataset == 'city':
         args.savedir = 'results/{}_{}_{}'.format('results', args.dataset, args.split)
+    elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
+        args.savedir = 'results/{}_{}/{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
         args.savedir = 'results/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
     else:
