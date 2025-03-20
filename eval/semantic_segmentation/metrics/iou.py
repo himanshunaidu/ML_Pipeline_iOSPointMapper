@@ -1,9 +1,9 @@
 import numpy as np
 import torch
 
-class MIOU(object):
+class IOU(object):
     """
-    Helps to calculate the mean intersection over union (mIoU) metric for semantic segmentation, by providing the
+    Helps to calculate the intersection over union (mIoU) metric for semantic segmentation, by providing the
     intersection and union values for each class.
     Works with both CPU and GPU PyTorch tensors.
 
