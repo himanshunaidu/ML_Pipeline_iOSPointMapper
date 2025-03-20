@@ -25,6 +25,27 @@ class Dice(object):
         self.epsilon = epsilon
     
     def get_dice(self, output, target):
+        """
+        Calculate the Dice coefficient of a segmentation.
+
+        Parameters
+        ----------
+        output : torch.ByteTensor
+            The output segmentation mask.
+            A 4D tensor with dimensions (batch_size, num_classes, height, width).
+
+        target : torch.ByteTensor
+            The target segmentation mask.
+            A 3D tensor with dimensions (batch_size, height, width).
+
+        Returns
+        -------
+        area_numerator : numpy.ndarray
+            The numerator values for each class.
+
+        area_denominator : numpy.ndarray
+            The denominator values for each class.            
+        """
         if isinstance(output, tuple):
             output = output[0]
 

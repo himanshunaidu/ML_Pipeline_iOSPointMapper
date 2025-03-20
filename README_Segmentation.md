@@ -4,8 +4,7 @@
 
 For running Cityscapes dataset, use the following command:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python test_segmentation.py --model espnetv2 --s 2.0 --dataset city --data-path ./datasets/cityscapes/ --split val --im-size 1024
- 512
+CUDA_VISIBLE_DEVICES=0 python test_segmentation.py --model espnetv2 --s 2.0 --dataset city --data-path ./datasets/cityscapes/ --split val --im-size 1024 512
 ```
 
 For running Edge_Mapping dataset, use the following command:

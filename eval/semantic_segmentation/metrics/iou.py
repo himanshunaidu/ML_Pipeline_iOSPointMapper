@@ -25,6 +25,27 @@ class IOU(object):
         self.epsilon = epsilon
 
     def get_iou(self, output, target):
+        """
+        Calculate the intersection over union coefficient of a segmentation.
+
+        Parameters
+        ----------
+        output : torch.ByteTensor
+            The output segmentation mask.
+            A 4D tensor with dimensions (batch_size, num_classes, height, width).
+
+        target : torch.ByteTensor
+            The target segmentation mask.
+            A 3D tensor with dimensions (batch_size, height, width).
+
+        Returns
+        -------
+        area_inter : numpy.ndarray
+            The intersection values for each class.
+
+        area_union : numpy.ndarray
+            The union values for each class.
+        """
         if isinstance(output, tuple):
             output = output[0]
 
