@@ -61,6 +61,7 @@ class IOU(object):
         target = target.type(torch.ByteTensor)
 
         # shift by 1 so that 255 is 0
+        # TODO: Check if this is necessary in the current implementation
         pred += 1
         target += 1
 

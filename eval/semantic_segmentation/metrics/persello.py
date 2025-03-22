@@ -32,12 +32,15 @@ class Persello(object):
         target = target.type(torch.ByteTensor)
         
         # shift by 1 so that 255 is 0
+        # TODO: Check if this is necessary in the current implementation
+        #   It seems to be so only because of the way the cityscapes training is being done.
+        #   The background label is being given a value of 255, when by convention, it should be 0.
         pred += 1
         target += 1
 
         return pred, target
 
-    def get_regions(self, img: Tensor):
+    def get_regions(self, img: Tensor, background_label=0):
         """
         Get the number of regions in an image using skimage.
         # NOTE: Follows the assumption that there are at maximum 255 regions in the segmentation
@@ -45,10 +48,23 @@ class Persello(object):
         # detect contiguous regions
         img_numpy = img.numpy()
         img_numpy = img_numpy.astype(np.uint8)
-        regions = label(img_numpy)
+        regions = label(img_numpy, background=background_label)
         # Truncate the regions to 255
         regions[regions > 255] = 255
         return torch.from_numpy(regions)
+
+    def get_region_class_map(self, img: Tensor, regions: Tensor, region_bin_counts: Tensor):
+        """
+        Get the mapping of region labels to class labels.
+        Do this by getting the pixel value of the image at the region label.
+
+        The region_bin_counts tensor is used to get the number of regions in the segmentation.
+        """
+        region_class_map = torch.zeros(region_bin_counts.shape[0], dtype=torch.long)
+        for i in range(1, region_bin_counts.shape[0]):
+            region_class_map[i] = img[regions == i][0]
+        return region_class_map
+
 
     def get_regions_overlap(self, pred_regions: Tensor, target_regions: Tensor,
                             pred_region_bin_counts: Tensor, target_region_bin_counts: Tensor):
@@ -88,6 +104,19 @@ class Persello(object):
         overlap = indices_bin_counts.reshape(target_region_bin_counts.shape[0], pred_region_bin_counts.shape[0])
         return overlap
 
+    def filter_regions_overlap(self, regions_overlap: Tensor, 
+                               pred_region_class_map: Tensor, target_region_class_map: Tensor):
+        """
+        Filter the regions overlap tensor to only store the overlap values between regions
+        that have the same class label.
+        """
+        # Create a 0-1 mask tensor that has 1s where the class labels of the regions match
+        class_match_mask = (pred_region_class_map.unsqueeze(0) == target_region_class_map.unsqueeze(1)).float()
+        # Multiply the mask with the regions overlap tensor to get the filtered overlap tensor
+        filtered_overlap = regions_overlap * class_match_mask
+        return filtered_overlap
+
+
     def over_segmentation_error(self, regions_overlap: Tensor, region_matches: Tensor,
                                 pred_region_bin_counts: Tensor, target_region_bin_counts: Tensor):
         """
@@ -117,22 +146,36 @@ class Persello(object):
     def get_persello(self, output, target):
         """
         Calculate the Persello metric for semantic segmentation.
+
+        Algorithm:
+        - Get the regions in the predicted and target segmentations.
+        - Get the region class map for each segmentation.
+        - Get the overlap between regions in the predicted and target segmentations.
+        - Filter the regions overlap tensor to only store the overlap values between regions
+          that have the same class label.
+        - Calculate the over-segmentation error for each region in the target segmentation.
+        - Calculate the under-segmentation error for each region in the target segmentation.
+        - Return the mean over-segmentation and under-segmentation errors.
         """
         pred, target = self.preprocess_inputs(output, target)
 
         # Get the regions in the predicted and target segmentations
         pred_regions = self.get_regions(pred)
         pred_region_counts = pred_regions.reshape(-1).bincount(minlength=1)
+        pred_region_class_map = self.get_region_class_map(pred, pred_regions, pred_region_counts)
         target_regions = self.get_regions(target)
         target_region_counts = target_regions.reshape(-1).bincount(minlength=1)
+        target_region_class_map = self.get_region_class_map(target, target_regions, target_region_counts)
         if len(pred_region_counts) <= 1 or len(target_region_counts) <= 1:
             return 1, 1
 
         # Get region overlap values, and for each region in the target segmentation,
         # get the region in the predicted segmentation that has the maximum overlap with it.
-        # While doing the region matches, avoid the background label of pred_regions.
+        # Make sure to only consider regions that have the same class label.
+        # Also, while doing the region matches, avoid the background label of pred_regions.
         regions_overlap = self.get_regions_overlap(pred_regions, target_regions, 
                                                    pred_region_counts, target_region_counts)
+        regions_overlap = self.filter_regions_overlap(regions_overlap, pred_region_class_map, target_region_class_map)
         region_matches = torch.argmax(regions_overlap[:, 1:], dim=1)+1
 
         # Calculate the Persello metrics
@@ -146,7 +189,12 @@ class Persello(object):
         return oversegmentation_errors[1:].mean().item(), undersegmentation_errors[1:].mean().item()
 
 if __name__=="__main__":
-    output: ByteTensor = torch.tensor(np.random.randint(0, 255, (1, 21, 256, 256))).byte()
-    target: ByteTensor = torch.tensor(np.random.randint(0, 255, (256, 256))).byte()
-    output = ByteTensor(np.array(output))
-    target = ByteTensor(np.array(target))
+    output: ByteTensor = torch.tensor(np.random.randint(0, 3, (1, 4, 4, 4))).byte()
+    target: ByteTensor = torch.tensor([[2, 2, 2, 0],
+        [255, 2, 1, 0],
+        [255, 2, 1, 1],
+        [255, 2, 2, 1]]).byte()
+
+    persello = Persello()
+    error = persello.get_persello(output, target)
+    print(error)
