@@ -1,19 +1,21 @@
 import numpy as np
 import torch
-import cv2
+from torch import Tensor, ByteTensor
 from skimage.measure import label
+import time
 
 class Persello(object):
     """
     Helps to calculate the Persello metric for semantic segmentation.
 
-    TODO: This code can be optimized by using PyTorch tensors instead of NumPy arrays.
+    Assumes that there are at maximum 255 regions in the segmentation.
 
     TODO: Check if the error metric has to take the segmentation labels into account.
     Currently, the error is only region-based, and not label-based.
     """
-    def __init__(self, num_classes=21):
+    def __init__(self, num_classes=21, epsilon=1e-6):
         self.num_classes = num_classes
+        self.epsilon = epsilon
 
     def preprocess_inputs(self, output, target):
         if isinstance(output, tuple):
@@ -26,106 +28,90 @@ class Persello(object):
         if target.device == torch.device('cuda'):
             target = target.cpu()
         
+        pred = pred.type(torch.ByteTensor)
+        target = target.type(torch.ByteTensor)
+        
         # shift by 1 so that 255 is 0
         pred += 1
         target += 1
 
         return pred, target
 
-    def get_regions(self, img: torch.ByteTensor):
+    def get_regions(self, img: Tensor):
         """
         Get the number of regions in an image using skimage.
+        # NOTE: Follows the assumption that there are at maximum 255 regions in the segmentation
         """
         # detect contiguous regions
-        img = img.numpy()
-        img = np.squeeze(img)
-        img = img.astype(np.uint8)
-        regions: np.ndarray = label(img)
-        return regions
+        img_numpy = img.numpy()
+        img_numpy = img_numpy.astype(np.uint8)
+        regions = label(img_numpy)
+        # Truncate the regions to 255
+        regions[regions > 255] = 255
+        return torch.from_numpy(regions)
 
-    def get_region_label_dict(self, regions):
+    def get_regions_overlap(self, pred_regions: Tensor, target_regions: Tensor,
+                            pred_region_bin_counts: Tensor, target_region_bin_counts: Tensor):
         """
-        Get a dictionary of region labels along with the index to be used to represent the region label.
-        The dictionary will be of the form {region_label: index}.
-        Also ignores the background label.
-        """
-        regions_unique_labels = np.unique(regions)
-        regions_unique_labels = regions_unique_labels[regions_unique_labels != 0]
-        region_label_dict = {region_label: i for i, region_label in enumerate(regions_unique_labels)}
-        return region_label_dict
-
-    def get_intersection(self, pred, target, pred_region, target_object):
-        """
-        Calculate the intersection of two regions.
-
+        Get the overlap between regions in the predicted and target segmentations.
+        
         Parameters:
         ----------
-        pred: torch.ByteTensor
-            The predicted segmentation.
+        pred_regions: Tensor
+            The regions in the predicted segmentation.
 
-        target: torch.ByteTensor
-            The target segmentation.
+        target_regions: Tensor
+            The regions in the target segmentation. Should be the same shape as pred_regions.
 
-        pred_region: int
-            The region label in the predicted segmentation.
+        pred_region_bin_counts: Tensor
+            The bin counts of the predicted regions.
 
-        target_object: int
-            The region label in the target segmentation.
+        target_region_bin_counts: Tensor
+            The bin counts of the target regions.
 
         Returns:
         --------
-        intersection: int
-            The intersection of the two regions.
+        overlap: Tensor
+            A 2D matrix that gives the size of the intersection between each region in pred_regions
+            with each region in target_regions.
         """
-        intersection = (pred == pred_region) & (target == target_object)
-        return np.where(intersection == True, 1, 0)
-    
-    def get_mod(self, image, label = 1):
-        """
-        Get the mod of a region in an image.
-        """
-        return np.sum(np.where(image == label, 1, 0))
+        pred_regions_flat = pred_regions.ravel()
+        target_regions_flat = target_regions.ravel()
 
-    def get_mods_for_regions(self, image, region_labels: dict):
-        """
-        Get the mod values for all regions in an image.
-        """
-        mods = []
-        for region_label, index in region_labels.items():
-            mod = self.get_mod(image, region_label)
-            mods.append(mod)
-        return mods
+        # Get a new tensor where each index gives us the value at the same index in pred_regions_flat and target_regions_flat
+        indices = target_regions_flat * pred_region_bin_counts.shape[0] + pred_regions_flat
 
-    def get_regions_overlap(self, pred_regions, target_regions, 
-                            pred_region_labels: dict, target_region_labels: dict):
-        """
-        Get the overlap between regions in the predicted and target segmentations
-        """
-        overlap = np.zeros((len(target_region_labels), len(pred_region_labels)))
-        for pred_region, i in pred_region_labels.items():
-            for target_region, j in target_region_labels.items():
-                intersection = self.get_intersection(pred_regions, target_regions, pred_region, target_region)
-                overlap[j, i] = self.get_mod(intersection, 1)
+        # Get the bin counts of the indices tensor
+        indices_bin_counts = torch.bincount(indices, minlength=target_region_bin_counts.shape[0] * pred_region_bin_counts.shape[0])
+
+        # Reshape the indices_bin_counts tensor to get the overlap tensor
+        overlap = indices_bin_counts.reshape(target_region_bin_counts.shape[0], pred_region_bin_counts.shape[0])
         return overlap
 
-    def over_segmentation_error(self, pred_region_labels: dict, target_region_labels: dict, 
-                                pred_mods, target_mods, regions_overlap, region_matches):
+    def over_segmentation_error(self, regions_overlap: Tensor, region_matches: Tensor,
+                                pred_region_bin_counts: Tensor, target_region_bin_counts: Tensor):
         """
         Calculate the over-segmentation error of a segmentation.
-        """
-        oversegmentation_errors = np.zeros(len(target_region_labels))
-        for target_label, j in target_region_labels.items():
-            oversegmentation_errors[j] = 1 - (regions_overlap[j, region_matches[j]]/target_mods[j])
-        return oversegmentation_errors
 
-    def under_segmentation_error(self, pred_region_labels: dict, target_region_labels: dict, 
-                                pred_mods, target_mods, regions_overlap, region_matches):
+        For each region in the target segmentation, the over-segmentation error is calculated as:
+        1 - (overlap / target_mod)
+        """
+        oversegmentation_errors = 1 - (
+            regions_overlap[torch.arange(len(region_matches)), region_matches] / \
+                (target_region_bin_counts+self.epsilon)
+        )
+        return oversegmentation_errors
+        
+
+    def under_segmentation_error(self, regions_overlap: Tensor, region_matches: Tensor,
+                                pred_region_bin_counts: Tensor, target_region_bin_counts: Tensor):
         """
         Calculate the under-segmentation error of a segmentation.
         """
-        undersegmentation_errors = np.zeros(len(target_region_labels))
-        for target_label, j in target_region_labels.items():
-            undersegmentation_errors[j] = 1 - (regions_overlap[j, region_matches[j]]/pred_mods[region_matches[j]])
+        undersegmentation_errors = 1 - (
+            regions_overlap[torch.arange(len(region_matches)), region_matches] / \
+                (pred_region_bin_counts[region_matches]+self.epsilon)
+        )
         return undersegmentation_errors
 
     def get_persello(self, output, target):
@@ -135,27 +121,32 @@ class Persello(object):
         pred, target = self.preprocess_inputs(output, target)
 
         # Get the regions in the predicted and target segmentations
-        # and ignore the background label
         pred_regions = self.get_regions(pred)
-        pred_region_labels = self.get_region_label_dict(pred_regions)
+        pred_region_counts = pred_regions.reshape(-1).bincount(minlength=1)
         target_regions = self.get_regions(target)
-        target_region_labels = self.get_region_label_dict(target_regions)
+        target_region_counts = target_regions.reshape(-1).bincount(minlength=1)
+        if len(pred_region_counts) <= 1 or len(target_region_counts) <= 1:
+            return 1, 1
 
-        # Get region mod values (including overlap)
-        pred_mods = self.get_mods_for_regions(pred_regions, pred_region_labels)
-        target_mods = self.get_mods_for_regions(target_regions, target_region_labels)
+        # Get region overlap values, and for each region in the target segmentation,
+        # get the region in the predicted segmentation that has the maximum overlap with it.
+        # While doing the region matches, avoid the background label of pred_regions.
         regions_overlap = self.get_regions_overlap(pred_regions, target_regions, 
-                                                   pred_region_labels, target_region_labels)
-        region_matches = np.argmax(regions_overlap, axis=1)
+                                                   pred_region_counts, target_region_counts)
+        region_matches = torch.argmax(regions_overlap[:, 1:], dim=1)+1
 
         # Calculate the Persello metrics
         oversegmentation_errors = self.over_segmentation_error(
-            pred_region_labels, target_region_labels,
-            pred_mods, target_mods, regions_overlap, region_matches)
+            regions_overlap, region_matches, pred_region_counts, target_region_counts
+        )
         undersegmentation_errors = self.under_segmentation_error(
-            pred_region_labels, target_region_labels,
-            pred_mods, target_mods, regions_overlap, region_matches)
-        return oversegmentation_errors, undersegmentation_errors
+            regions_overlap, region_matches, pred_region_counts, target_region_counts
+        )
+        # Ignore the background label of target_regions
+        return oversegmentation_errors[1:].mean().item(), undersegmentation_errors[1:].mean().item()
 
-
-        
+if __name__=="__main__":
+    output: ByteTensor = torch.tensor(np.random.randint(0, 255, (1, 21, 256, 256))).byte()
+    target: ByteTensor = torch.tensor(np.random.randint(0, 255, (256, 256))).byte()
+    output = ByteTensor(np.array(output))
+    target = ByteTensor(np.array(target))
