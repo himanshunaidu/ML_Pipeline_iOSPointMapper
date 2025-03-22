@@ -12,6 +12,8 @@ class Persello(object):
 
     TODO: Check if the error metric has to take the segmentation labels into account.
     Currently, the error is only region-based, and not label-based.
+
+    TODO: Need to find a way to remove the background label from the persello calculation.
     """
     def __init__(self, num_classes=21, epsilon=1e-6):
         self.num_classes = num_classes
@@ -70,6 +72,12 @@ class Persello(object):
                             pred_region_bin_counts: Tensor, target_region_bin_counts: Tensor):
         """
         Get the overlap between regions in the predicted and target segmentations.
+
+        Instead of performing a nested loop to get the overlap between each region in pred_regions
+        with each region in target_regions, we can use the following algorithm:
+        - Get a new tensor where each index gives us the value at the same index in pred_regions and target_regions.
+        - Get the bin counts of the indices tensor.
+        - Reshape the indices_bin_counts tensor to get the overlap tensor.
         
         Parameters:
         ----------
@@ -109,6 +117,11 @@ class Persello(object):
         """
         Filter the regions overlap tensor to only store the overlap values between regions
         that have the same class label.
+
+        Instead of performing a nested loop to check if the class labels of the regions match,
+        we can use the following algorithm:
+        - Create a 0-1 mask tensor that has 1s where the class labels of the regions match.
+        - Multiply the mask with the regions overlap tensor to get the filtered overlap tensor.
         """
         # Create a 0-1 mask tensor that has 1s where the class labels of the regions match
         class_match_mask = (pred_region_class_map.unsqueeze(0) == target_region_class_map.unsqueeze(1)).float()
@@ -172,11 +185,10 @@ class Persello(object):
         # Get region overlap values, and for each region in the target segmentation,
         # get the region in the predicted segmentation that has the maximum overlap with it.
         # Make sure to only consider regions that have the same class label.
-        # Also, while doing the region matches, avoid the background label of pred_regions.
         regions_overlap = self.get_regions_overlap(pred_regions, target_regions, 
                                                    pred_region_counts, target_region_counts)
         regions_overlap = self.filter_regions_overlap(regions_overlap, pred_region_class_map, target_region_class_map)
-        region_matches = torch.argmax(regions_overlap[:, 1:], dim=1)+1
+        region_matches = torch.argmax(regions_overlap, dim=1)
 
         # Calculate the Persello metrics
         oversegmentation_errors = self.over_segmentation_error(
@@ -186,7 +198,8 @@ class Persello(object):
             regions_overlap, region_matches, pred_region_counts, target_region_counts
         )
         # Ignore the background label of target_regions
-        return oversegmentation_errors[1:].mean().item(), undersegmentation_errors[1:].mean().item()
+        print(oversegmentation_errors, undersegmentation_errors)
+        return oversegmentation_errors.mean().item(), undersegmentation_errors.mean().item()
 
 if __name__=="__main__":
     output: ByteTensor = torch.tensor(np.random.randint(0, 3, (1, 4, 4, 4))).byte()
@@ -194,6 +207,8 @@ if __name__=="__main__":
         [255, 2, 1, 0],
         [255, 2, 1, 1],
         [255, 2, 2, 1]]).byte()
+    # output: ByteTensor = torch.tensor([0, 1, 2, 2, 2, 3, 4, 4]).byte()
+    # target: ByteTensor = torch.tensor([0, 1, 2, 2, 3, 3, 4, 4]).byte()
 
     persello = Persello()
     error = persello.get_persello(output, target)
