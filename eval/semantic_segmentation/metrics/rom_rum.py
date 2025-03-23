@@ -156,36 +156,30 @@ class ROMRUM(object):
 
         # Get ROM
         # First get the ground-truth regions that have more than one predicted region overlapping with them.
-        target_os = (torch.sum(torch.where(regions_overlap >= 1, 1, 0), dim=1) > 1).float()
-        print(target_os)
+        target_os = torch.sum(torch.where(regions_overlap >= 1, 1, 0), dim=1)
         # Then get the predicted regions that overlap with any ground-truth region that is over-segmented.
-        pred_os = target_os @ (regions_overlap >= 1).float()
-        print(pred_os)
+        pred_os = (target_os > 1).float() @ (regions_overlap >= 1).float()
         # Calculate the ROM
-        ror_os = (torch.sum(target_os) / len(target_region_counts)) * (torch.sum(pred_os) / len(pred_region_counts))
-        mo = torch.max(torch.tensor([0]), torch.max(pred_os - 1))
-        rom = math.tanh(ror_os * mo)
-        print(rom)
+        ror = (torch.sum(target_os) / len(target_region_counts)) * (torch.sum(pred_os) / len(pred_region_counts))
+        mo = torch.sum(torch.max(torch.tensor([0]), target_os - 1))
+        rom = math.tanh(ror * mo)
 
         # Get RUM
         # First get the predicted regions that have more than one ground-truth region overlapping with them.
-        pred_us = (torch.sum(torch.where(regions_overlap >= 1, 1, 0), dim=0) > 1).float()
-        print(pred_us)
+        pred_us = torch.sum(torch.where(regions_overlap >= 1, 1, 0), dim=0)
         # Then get the ground-truth regions that overlap with any predicted region that is under-segmented.
-        gt_us = pred_us @ (regions_overlap >= 1).float()
-        print(gt_us)
+        target_us = (pred_us > 1).float() @ (regions_overlap.T >= 1).float()
         # Calculate the RUM
-        rur_us = (torch.sum(pred_us) / len(pred_region_counts)) * (torch.sum(gt_us) / len(target_region_counts))
-        mu = torch.max(torch.tensor([0]), torch.max(gt_us - 1))
-        rum = math.tanh(rur_us * mu)
-        print(rum)
+        rur = (torch.sum(pred_us) / len(pred_region_counts)) * (torch.sum(target_us) / len(target_region_counts))
+        mu = torch.sum(torch.max(torch.tensor([0]), pred_us - 1))
+        rum = math.tanh(rur * mu)
 
     
 if __name__=="__main__":
     # output = Image.open("pred.png")
     # target = Image.open("target.png")
-    output: torch.ByteTensor = torch.tensor([0, 1, 2, 2, 3, 5, 3, 3, 5, 5]).byte()
-    target: torch.ByteTensor = torch.tensor([4, 1, 1, 2, 3, 3, 3, 3, 4, 4]).byte()
+    output: torch.ByteTensor = torch.tensor([0, 1, 2, 2, 3, 3, 3, 3, 5, 5]).byte()
+    target: torch.ByteTensor = torch.tensor([4, 1, 1, 2, 3, 4, 3, 3, 4, 4]).byte()
 
     persello = ROMRUM()
     print(persello.get_rom_rum(output, target))
