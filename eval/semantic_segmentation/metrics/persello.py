@@ -186,16 +186,18 @@ class Persello(object):
         regions_overlap = self.get_regions_overlap(pred_regions, target_regions, 
                                                    pred_region_counts, target_region_counts)
         regions_overlap = self.filter_regions_overlap(regions_overlap, pred_region_class_map, target_region_class_map)
-        # NOTE: What to do if a region matches with no other region and default value is 0?
+        # Ignore the background label of target_regions
+        regions_overlap[:, 0] = 0
+        regions_overlap[0, :] = 0
         region_matches = torch.argmax(regions_overlap, dim=1)
 
         # Calculate the Persello metrics
         oversegmentation_errors = self.over_segmentation_error(
             regions_overlap, region_matches, pred_region_counts, target_region_counts
-        )
+        )[1:]
         undersegmentation_errors = self.under_segmentation_error(
             regions_overlap, region_matches, pred_region_counts, target_region_counts
-        )
+        )[1:]
         # Ignore the background label of target_regions
         print(oversegmentation_errors, undersegmentation_errors)
         return oversegmentation_errors.mean().item(), undersegmentation_errors.mean().item()

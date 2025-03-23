@@ -142,26 +142,26 @@ class ROMRUM(object):
         target_region_class_map = self.get_region_class_map(target, target_regions, target_region_counts)
         if len(pred_region_counts) <= 1 or len(target_region_counts) <= 1:
             return 1, 1
-        print(target_regions)
-        print(pred_regions)
         
         # Get region overlap values, and for each region in the target segmentation,
         # get the number of regions in the predicted segmentation that overlap with it.
         # Make sure to only consider regions that have the same class label.
         regions_overlap = self.get_regions_overlap(pred_regions, target_regions, 
                                                    pred_region_counts, target_region_counts)
-        print(regions_overlap)
         regions_overlap = self.filter_regions_overlap(regions_overlap, pred_region_class_map, target_region_class_map)
-        print(regions_overlap)
+        # Ignore the background label of target_regions
+        regions_overlap[:, 0] = 0
+        regions_overlap[0, :] = 0
 
         # Get ROM
         # First get the ground-truth regions that have more than one predicted region overlapping with them.
         target_os = torch.sum(torch.where(regions_overlap >= 1, 1, 0), dim=1)
         # Then get the predicted regions that overlap with any ground-truth region that is over-segmented.
         pred_os = (target_os > 1).float() @ (regions_overlap >= 1).float()
-        # Calculate the ROM
-        ror = (torch.sum(target_os) / len(target_region_counts)) * (torch.sum(pred_os) / len(pred_region_counts))
-        mo = torch.sum(torch.max(torch.tensor([0]), target_os - 1))
+        # Calculate the ROM while ignoring the background label
+        ror = (torch.sum(target_os[1:]) / (len(target_region_counts)-1)) * \
+            (torch.sum(pred_os[1:]) / (len(pred_region_counts)-1))
+        mo = torch.sum(torch.max(torch.tensor([0]), target_os[1:] - 1))
         rom = math.tanh(ror * mo)
 
         # Get RUM
@@ -170,16 +170,37 @@ class ROMRUM(object):
         # Then get the ground-truth regions that overlap with any predicted region that is under-segmented.
         target_us = (pred_us > 1).float() @ (regions_overlap.T >= 1).float()
         # Calculate the RUM
-        rur = (torch.sum(pred_us) / len(pred_region_counts)) * (torch.sum(target_us) / len(target_region_counts))
-        mu = torch.sum(torch.max(torch.tensor([0]), pred_us - 1))
+        rur = (torch.sum(pred_us[1:]) / (len(pred_region_counts)-1)) * \
+            (torch.sum(target_us[1:]) / (len(target_region_counts)-1))
+        mu = torch.sum(torch.max(torch.tensor([0]), pred_us[1:] - 1))
         rum = math.tanh(rur * mu)
+
+        return rom, rum
 
     
 if __name__=="__main__":
     # output = Image.open("pred.png")
     # target = Image.open("target.png")
-    output: torch.ByteTensor = torch.tensor([0, 1, 2, 2, 3, 3, 3, 3, 5, 5]).byte()
-    target: torch.ByteTensor = torch.tensor([4, 1, 1, 2, 3, 4, 3, 3, 4, 4]).byte()
+    output: ByteTensor = torch.tensor([
+        [0, 0, 1, 1, 2, 2, 255, 255],
+        [0, 0, 1, 1, 2, 2, 3, 3],
+        [1, 1, 1, 1, 2, 2, 3, 3],
+        [1, 1, 1, 1, 2, 2, 3, 3],
+        [2, 2, 2, 2, 3, 3, 3, 3],
+        [2, 2, 2, 2, 3, 3, 3, 3],
+        [3, 3, 1, 3, 3, 255, 255, 255],
+        [1, 3, 1, 3, 255, 255, 3, 3]
+    ]).byte()
+    target: ByteTensor = torch.tensor([
+        [0, 0, 1, 1, 2, 2, 3, 3],
+        [0, 0, 1, 1, 2, 2, 3, 3],
+        [1, 1, 1, 1, 2, 2, 3, 3],
+        [1, 1, 1, 1, 2, 2, 3, 3],
+        [2, 2, 2, 1, 3, 3, 3, 3],
+        [2, 2, 2, 2, 3, 3, 3, 3],
+        [3, 3, 3, 3, 255, 255, 255, 255],
+        [3, 3, 3, 3, 255, 255, 255, 255]
+    ]).byte()
 
     persello = ROMRUM()
     print(persello.get_rom_rum(output, target))
