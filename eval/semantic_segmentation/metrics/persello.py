@@ -10,10 +10,8 @@ class Persello(object):
 
     Assumes that there are at maximum 255 regions in the segmentation.
 
-    TODO: Check if the error metric has to take the segmentation labels into account.
-    Currently, the error is only region-based, and not label-based.
-
     TODO: Need to find a way to remove the background label from the persello calculation.
+    Would probably be better to do so in the filter_regions_overlap method.
     """
     def __init__(self, num_classes=21, epsilon=1e-6):
         self.num_classes = num_classes
@@ -188,6 +186,7 @@ class Persello(object):
         regions_overlap = self.get_regions_overlap(pred_regions, target_regions, 
                                                    pred_region_counts, target_region_counts)
         regions_overlap = self.filter_regions_overlap(regions_overlap, pred_region_class_map, target_region_class_map)
+        # NOTE: What to do if a region matches with no other region and default value is 0?
         region_matches = torch.argmax(regions_overlap, dim=1)
 
         # Calculate the Persello metrics
