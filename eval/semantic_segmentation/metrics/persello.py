@@ -7,15 +7,11 @@ import time
 class Persello(object):
     """
     Helps to calculate the Persello metric for semantic segmentation.
-
-    Assumes that there are at maximum 255 regions in the segmentation.
-
-    TODO: Need to find a way to remove the background label from the persello calculation.
-    Would probably be better to do so in the filter_regions_overlap method.
     """
-    def __init__(self, num_classes=21, epsilon=1e-6):
+    def __init__(self, num_classes=21, epsilon=1e-6, max_regions=255):
         self.num_classes = num_classes
         self.epsilon = epsilon
+        self.max_regions = max_regions
 
     def preprocess_inputs(self, output, target):
         if isinstance(output, tuple):
@@ -50,7 +46,7 @@ class Persello(object):
         img_numpy = img_numpy.astype(np.uint8)
         regions = label(img_numpy, background=background_label)
         # Truncate the regions to 255
-        regions[regions > 255] = 255
+        regions[regions > self.max_regions] = self.max_regions
         return torch.from_numpy(regions)
 
     def get_region_class_map(self, img: Tensor, regions: Tensor, region_bin_counts: Tensor):

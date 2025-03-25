@@ -8,13 +8,18 @@ class ROMRUM(object):
     """
     Helps to calculate the Region-wise over-segmentation measure (ROM) and region-wise under-segmentation measure (RUM).
 
-    Assumes that there are at maximum 255 regions in the segmentation.
+    Parameters:
+    -----------
+    num_classes: int
+        The number of classes in the segmentation.
 
-    TODO: Need to find a way to remove the background label from the persello calculation.
-    Would probably be better to do so in the filter_regions_overlap method.
+    max_regions: int
+        The maximum number of regions that can be practically present in the segmentation.
+        (Will ignore regions beyond this number)
     """
-    def __init__(self, num_classes=21):
+    def __init__(self, num_classes=21, max_regions=255):
         self.num_classes = num_classes
+        self.max_regions = max_regions
 
     def preprocess_inputs(self, output, target):
         if isinstance(output, tuple):
@@ -49,8 +54,8 @@ class ROMRUM(object):
         img_numpy = img.numpy()
         img_numpy = img_numpy.astype(np.uint8)
         regions = label(img_numpy, background=background_label)
-        # Truncate the regions to 255
-        regions[regions > 255] = 255
+        # Truncate the regions to the maximum number of regions
+        regions[regions > self.max_regions] = self.max_regions
         return torch.from_numpy(regions)
 
     def get_region_class_map(self, img: Tensor, regions: Tensor, region_bin_counts: Tensor):
@@ -202,5 +207,5 @@ if __name__=="__main__":
         [3, 3, 3, 3, 255, 255, 255, 255]
     ]).byte()
 
-    persello = ROMRUM()
-    print(persello.get_rom_rum(output, target))
+    romrum = ROMRUM()
+    print(romrum.get_rom_rum(output, target))
