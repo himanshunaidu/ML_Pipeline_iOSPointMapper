@@ -22,7 +22,7 @@ if __name__ == '__main__':
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from utilities.print_utils import *
 
-def check_empty_img(img_path): 
+def check_empty_img(img_path: str): 
     # Reading Image 
     # You can give path to the  
     # image as first argument 
@@ -31,7 +31,7 @@ def check_empty_img(img_path):
     # Checking if the image is empty or not 
     return image is None
 
-def match_location_with_images(location_df, image_files, 
+def match_location_with_images(location_df: pd.DataFrame, image_files: list[str], 
                                *, location_identifier_column = 'sys_time'):
     """
     Function to match the geospatial information with the image files.
@@ -41,7 +41,7 @@ def match_location_with_images(location_df, image_files,
     location_df: pd.DataFrame
         Dataframe containing the geospatial information.
 
-    image_files: list
+    image_files: list[str]
         List of image files.
 
     location_identifier_column: str
@@ -53,8 +53,7 @@ def match_location_with_images(location_df, image_files,
         Dataframe containing the geospatial information of the image files.
     """
     # Get the image names
-    image_names = [os.path.basename(f).split('_')[:-1] for f in image_files]
-    print(image_names[:5])
+    image_names = ['_'.join(os.path.basename(f).split('_')[:-1]) for f in image_files]
     location_df = location_df[location_df[location_identifier_column].isin(image_names)]
     return location_df
 
@@ -95,7 +94,8 @@ def save_split(split, rgb_files, depth_files, location_df, output_path):
     # Save the location information
     location_df.to_csv(os.path.join(split_path, 'location.csv'))
 
-def get_split_info(split, rgb_files, depth_files, location_df, output_path,
+def get_split_info(split: str, rgb_files: list[str], depth_files: list[str], location_df: pd.DataFrame, 
+                   output_path: str,
                    *, match_column = 'match_column', location_identifier_column = 'sys_time'):
     """
     Function to save the split information.
@@ -132,14 +132,14 @@ def get_split_info(split, rgb_files, depth_files, location_df, output_path,
     split_df = pd.DataFrame({'rgb': rgb_files, 'depth': depth_files})
 
     # Get the matching geospatial information
-    split_df[match_column] = split_df['rgb'].apply(lambda x: os.path.basename(x).split('_')[0])
+    split_df[match_column] = split_df['rgb'].apply(lambda x: '_'.join(os.path.basename(x).split('_')[:-1]))
     split_df = split_df.merge(location_df, left_on = match_column, right_on = location_identifier_column, how = 'left')
     split_df.drop(columns = [match_column], inplace = True)
     
     return split_df
 
 
-def main(dataset_path, folder_patterns, location_files, output_path, 
+def main(dataset_path: str, folder_patterns: dict, location_files: list[str], output_path: str, 
          *, random_state = 42, train_size = 0.7, val_size = 0.15, test_size = 0.15,
          location_identifier_column = 'sys_time'):
     """
