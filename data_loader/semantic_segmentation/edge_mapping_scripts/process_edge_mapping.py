@@ -53,7 +53,8 @@ def match_location_with_images(location_df, image_files,
         Dataframe containing the geospatial information of the image files.
     """
     # Get the image names
-    image_names = [os.path.basename(f).split('_')[0] for f in image_files]
+    image_names = [os.path.basename(f).split('_')[:-1] for f in image_files]
+    print(image_names[:5])
     location_df = location_df[location_df[location_identifier_column].isin(image_names)]
     return location_df
 
@@ -184,7 +185,7 @@ def main(dataset_path, folder_patterns, location_files, output_path,
     depth_files_path = os.path.join(dataset_path, 'depth', folder_patterns['depth'])
 
     rgb_files_temp = glob.glob(rgb_files_path)
-    # rgb_files = rgb_files[:100] # MARK: For testing
+    rgb_files_temp = rgb_files_temp[:100] # MARK: For testing
     # Filter out empty images
     rgb_files = []
     for rgb_file in tqdm(rgb_files_temp, desc='Checking empty images'):
@@ -204,37 +205,38 @@ def main(dataset_path, folder_patterns, location_files, output_path,
     # print(location_df.columns)
 
     # Split the dataset
-    train_files, test_files = train_test_split(rgb_files, test_size = test_size, random_state = random_state)
-    train_files, val_files = train_test_split(train_files, test_size = val_size/(1-test_size), random_state = random_state)
+    train_rgb_files, test_rgb_files = train_test_split(rgb_files, test_size = test_size, random_state = random_state)
+    train_rgb_files, val_rgb_files = train_test_split(train_rgb_files, test_size = val_size/(1-test_size), random_state = random_state)
 
-    print('RGB:: Train size: {}, Val size: {}, Test size: {}'.format(len(train_files), len(val_files), len(test_files)))
+    print('RGB:: Train size: {}, Val size: {}, Test size: {}'.format(len(train_rgb_files), len(val_rgb_files), len(test_rgb_files)))
 
     # Get the corresponding depth files
     # MARK: This will fail if the word rgb is present in any parent folder's name
-    train_depth_files = [f.replace('rgb', 'depth').replace('png', 'npy') for f in train_files]
-    val_depth_files = [f.replace('rgb', 'depth').replace('png', 'npy') for f in val_files]
-    test_depth_files = [f.replace('rgb', 'depth').replace('png', 'npy') for f in test_files]
+    train_depth_files = [f.replace('rgb', 'depth').replace('png', 'npy') for f in train_rgb_files]
+    val_depth_files = [f.replace('rgb', 'depth').replace('png', 'npy') for f in val_rgb_files]
+    test_depth_files = [f.replace('rgb', 'depth').replace('png', 'npy') for f in test_rgb_files]
 
     print("Depth:: Train size: {}, Val size: {}, Test size: {}".format(len(train_depth_files), len(val_depth_files), len(test_depth_files)))
 
     # Get the corresponding geospatial information
-    train_location_df = match_location_with_images(location_df, train_files, location_identifier_column = location_identifier_column)
-    val_location_df = match_location_with_images(location_df, val_files, location_identifier_column = location_identifier_column)
-    test_location_df = match_location_with_images(location_df, test_files, location_identifier_column = location_identifier_column)
+    train_location_df = match_location_with_images(location_df, train_rgb_files, location_identifier_column = location_identifier_column)
+    sys.exit(0)
+    val_location_df = match_location_with_images(location_df, val_rgb_files, location_identifier_column = location_identifier_column)
+    test_location_df = match_location_with_images(location_df, test_rgb_files, location_identifier_column = location_identifier_column)
 
     # Save the image, depth and location information in separate splits
     for split, files, depth_files, location_df in zip(['train', 'val', 'test'], 
-                                                      [train_files, val_files, test_files], 
+                                                      [train_rgb_files, val_rgb_files, test_rgb_files], 
                                                       [train_depth_files, val_depth_files, test_depth_files],
                                                       [train_location_df, val_location_df, test_location_df]):
         print_info_message('Processing {} split'.format(split))
         
         # Transfer the files to the output folder
-        save_split(split, files, depth_files, location_df, output_path)
-        print_info_message('Saved {} split at {}'.format(split, os.path.join(output_path, split)))
+        # save_split(split, files, depth_files, location_df, output_path)
+        # print_info_message('Saved {} split at {}'.format(split, os.path.join(output_path, split)))
         
         # Save the csv file
-        output_csv_path = os.path.join(output_path, '{}.csv'.format(split))
+        output_csv_path = os.path.join(output_path, 'split2/{}.csv'.format(split))
         # Instead of using the paths relative to the current directory, we will use the paths relative to the dataset directory
         data_files = [os.path.relpath(f, dataset_path) for f in files]
         depth_data_files = [os.path.relpath(f, dataset_path) for f in depth_files]
