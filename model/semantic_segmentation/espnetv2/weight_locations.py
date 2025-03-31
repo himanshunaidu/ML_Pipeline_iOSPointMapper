@@ -1,4 +1,3 @@
-
 model_weight_map = {}
 # key is of the form <model-name_model-scale>
 
