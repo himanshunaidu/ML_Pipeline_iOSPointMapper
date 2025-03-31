@@ -120,6 +120,26 @@ class RandomCrop(object):
         label_img = F.crop(label_img, i, j, h, w)
         return rgb_img, label_img
 
+class VerticalHalfCrop(object):
+    '''
+    Crop the image in half vertically and return the half depending on the index
+    index = 0 for left half, index = 1 for right half
+    '''
+    def __init__(self, index=0):
+        self.index = index
+
+    def __call__(self, rgb_img, label_img):
+        w, h = rgb_img.size
+        i, j = 0, 0
+        if self.index == 0:
+            i, j, h, w = 0, 0, h, int(w / 2)
+        elif self.index == 1:
+            i, j, h, w = 0, int(w / 2), h, int(w / 2)
+        
+        rgb_img = F.crop(rgb_img, i, j, h, w)
+        label_img = F.crop(label_img, i, j, h, w)
+        return rgb_img, label_img   
+
 
 class RandomResizedCrop(object):
     '''

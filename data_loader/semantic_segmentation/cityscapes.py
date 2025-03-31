@@ -3,6 +3,7 @@ import torch.utils.data as data
 import os
 from PIL import Image
 from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose
+from transforms.semantic_segmentation.data_transforms import VerticalHalfCrop
 
 CITYSCAPE_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
@@ -82,6 +83,38 @@ class CityscapesSegmentation(data.Dataset):
         rgb_img = Image.open(self.images[index]).convert('RGB')
         label_img = Image.open(self.masks[index])
 
+        if self.train:
+            rgb_img, label_img = self.train_transforms(rgb_img, label_img)
+        else:
+            rgb_img, label_img = self.val_transforms(rgb_img, label_img)
+
+        return rgb_img, label_img
+
+class CityscapesSegmentationForAccessibility(CityscapesSegmentation):
+    """
+    A class to load the Cityscapes dataset for semantic segmentation with accessibility focus.
+
+    Currently, for accessibility focus, the dataset only splits each image vertically into two halves.
+    We assume that both the halves can give a better focus from a pedestrian's perspective.
+    """
+    def __init__(self, root, train=True, scale=(0.5, 2.0), size=(512, 512), ignore_idx=255, coarse=True):
+        super().__init__(root, train, scale, size, ignore_idx, coarse)
+
+    def __len__(self):
+        # Return twice the number of images for accessibility focus
+        return len(self.images) * 2
+    
+    def __getitem__(self, index):
+        # Determine which half of the image to load
+        half_index = index // 2
+        half_side = index % 2
+
+        rgb_img = Image.open(self.images[half_index]).convert('RGB')
+        label_img = Image.open(self.masks[half_index])
+
+        # Apply the vertical half crop transformation
+        rgb_img, label_img = VerticalHalfCrop(index=half_side)(rgb_img, label_img)
+        # Apply the transformations
         if self.train:
             rgb_img, label_img = self.train_transforms(rgb_img, label_img)
         else:
