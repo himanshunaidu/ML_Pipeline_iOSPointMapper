@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 
-
 class SegmentationLoss(nn.Module):
     def __init__(self, n_classes=21, loss_type='ce', device='cuda', ignore_idx=255, class_wts=None):
         super(SegmentationLoss, self).__init__()
@@ -17,7 +16,7 @@ class SegmentationLoss(nn.Module):
         else:
             self.loss_fn = nn.CrossEntropyLoss(ignore_index=self.ignore_idx, weight=self.class_wts)
 
-    def convert_to_one_hot(self, x):
+    def convert_to_one_hot(self, x: torch.Tensor):
         n, h, w = x.size()
         # remove the 255 index
         x[x == self.ignore_idx] = self.n_classes
@@ -29,7 +28,7 @@ class SegmentationLoss(nn.Module):
 
         return x_one_hot[:, :self.n_classes, :, :].contiguous()
 
-    def forward(self, inputs, target):
+    def forward(self, inputs, target: torch.Tensor):
         if isinstance(inputs, tuple):
             tuple_len = len(inputs)
             assert tuple_len == 2
