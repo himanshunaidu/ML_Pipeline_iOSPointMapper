@@ -275,7 +275,7 @@ if __name__ == "__main__":
 
     # model related params
     parser.add_argument('--s', type=float, default=2.0, help='Factor by which channels will be scaled')
-    parser.add_argument('--model', default='espnet', choices=segmentation_models,
+    parser.add_argument('--model', default='espnetv2', choices=segmentation_models,
                         help='Which model? basic= basic CNN model, res=resnet style)')
     parser.add_argument('--channels', default=3, type=int, help='Input channels')
     parser.add_argument('--num-classes', default=1000, type=int,
@@ -310,6 +310,7 @@ if __name__ == "__main__":
         weight_file_key = '{}_{}'.format(args.model, args.s)
         assert weight_file_key in model_weight_map.keys(), '{} does not exist'.format(weight_file_key)
         args.weights = model_weight_map[weight_file_key]
+        print(weight_file_key)
     else:
         args.weights = ''
         assert os.path.isfile(args.finetune), '{} weight file does not exist'.format(args.finetune)
@@ -322,7 +323,5 @@ if __name__ == "__main__":
     args.savedir = '{}/model_{}_{}/s_{}_sch_{}_loss_{}_res_{}_sc_{}_{}/{}'.format(args.savedir, args.model, args.dataset, args.s,
                                                                          args.scheduler,
                                                                          args.loss_type, args.crop_size[0], args.scale[0], args.scale[1], timestr)
-    print(weight_file_key)
-    print(args)
-    exit(0)
+    
     main(args)
