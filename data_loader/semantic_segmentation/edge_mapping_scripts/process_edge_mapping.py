@@ -21,6 +21,7 @@ from sklearn.model_selection import train_test_split
 if __name__ == '__main__':
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 from utilities.print_utils import *
+from datetime import datetime
 
 def check_empty_img(img_path: str): 
     # Reading Image 
@@ -32,9 +33,17 @@ def check_empty_img(img_path: str):
     return image is None
 
 def match_location_with_images(location_df: pd.DataFrame, image_files: list[str], 
-                               *, location_identifier_column = 'sys_time'):
+                               *, location_identifier_column = 'sys_time', 
+                               location_match_column = 'match_column', time_diff_column = 'time_diff'):
     """
     Function to match the geospatial information with the image files.
+    The idea is to match the time stamp of the image (given by the file name) with 
+    the time stamp in the geospatial information.
+
+    The image file name is assumed to be in the format `YYYY_MM_DD_HH_MI_SS_mmmmmm_rgb.png`
+    where `YYYY_MM_DD_HH_MI_SS` is the time stamp and `mmmmmm` is the millisecond part.
+    This convention also applies to the depth file name: `YYYY_MM_DD_HH_MI_SS_mmmmmm_depth.npy`
+    This convention also applies to the location identifier column in the geospatial information.
 
     Parameters:
     ----------
@@ -51,11 +60,37 @@ def match_location_with_images(location_df: pd.DataFrame, image_files: list[str]
     -------
     pd.DataFrame
         Dataframe containing the geospatial information of the image files.
+        Ordered according to the image files.
     """
-    # Get the image names
-    image_names = ['_'.join(os.path.basename(f).split('_')[:-1]) for f in image_files]
-    location_df = location_df[location_df[location_identifier_column].isin(image_names)]
-    return location_df
+    # Get the image names and convert to date time format
+    image_names = [datetime.strptime(
+        '_'.join(os.path.basename(f).split('_')[:-1]), '%Y_%m_%d_%H_%M_%S_%f'
+    ) for f in image_files]
+
+    # Convert the location identifier column to date time format
+    location_columns = location_df.columns.tolist()
+    location_columns.append(time_diff_column)
+    location_df['date_time'] = pd.to_datetime(
+        location_df[location_identifier_column], format='%Y_%m_%d_%H_%M_%S_%f'
+    )
+
+    # Get the matching geospatial information
+    image_locations = []
+    for image_name in tqdm(image_names, desc='Matching location with images'):
+        # Get the closest location information
+        closest_location_index = (location_df['date_time'] - image_name).abs().idxmin()
+        image_location = location_df.iloc[closest_location_index].copy()
+        time_diff = (image_location['date_time'] - image_name)
+        image_location.drop(labels=['date_time'], inplace=True)
+        image_location = image_location.to_list()
+        image_location.append(time_diff.total_seconds())
+        image_locations.append(image_location)
+
+    location_df.drop(columns=['date_time'], inplace=True)
+
+    image_locations_df = pd.DataFrame(image_locations, columns=location_columns)
+
+    return image_locations_df
 
 def save_split(split, rgb_files, depth_files, location_df, output_path):
     """
@@ -132,9 +167,7 @@ def get_split_info(split: str, rgb_files: list[str], depth_files: list[str], loc
     split_df = pd.DataFrame({'rgb': rgb_files, 'depth': depth_files})
 
     # Get the matching geospatial information
-    split_df[match_column] = split_df['rgb'].apply(lambda x: '_'.join(os.path.basename(x).split('_')[:-1]))
-    split_df = split_df.merge(location_df, left_on = match_column, right_on = location_identifier_column, how = 'left')
-    split_df.drop(columns = [match_column], inplace = True)
+    split_df = pd.concat([split_df, location_df], axis=1)
     
     return split_df
 
@@ -181,11 +214,13 @@ def main(dataset_path: str, folder_patterns: dict, location_files: list[str], ou
     None
     """
     # Load the rgb and depth images
+    # The image file name is assumed to be in the format `YYYY_MM_DD_HH_MI_SS_mmmmmm_rgb.png`
     rgb_files_path = os.path.join(dataset_path, 'rgb', folder_patterns['rgb'])
+    # The depth file name is assumed to be in the format `YYYY_MM_DD_HH_MI_SS_mmmmmm_depth.npy`
     depth_files_path = os.path.join(dataset_path, 'depth', folder_patterns['depth'])
 
     rgb_files_temp = glob.glob(rgb_files_path)
-    rgb_files_temp = rgb_files_temp[:100] # MARK: For testing
+    # rgb_files_temp = rgb_files_temp[:100] # MARK: For testing
     # Filter out empty images
     rgb_files = []
     for rgb_file in tqdm(rgb_files_temp, desc='Checking empty images'):
@@ -220,9 +255,9 @@ def main(dataset_path: str, folder_patterns: dict, location_files: list[str], ou
 
     # Get the corresponding geospatial information
     train_location_df = match_location_with_images(location_df, train_rgb_files, location_identifier_column = location_identifier_column)
-    sys.exit(0)
     val_location_df = match_location_with_images(location_df, val_rgb_files, location_identifier_column = location_identifier_column)
     test_location_df = match_location_with_images(location_df, test_rgb_files, location_identifier_column = location_identifier_column)
+    print('Location:: Train size: {}, Val size: {}, Test size: {}'.format(len(train_location_df), len(val_location_df), len(test_location_df)))
 
     # Save the image, depth and location information in separate splits
     for split, files, depth_files, location_df in zip(['train', 'val', 'test'], 
@@ -232,11 +267,11 @@ def main(dataset_path: str, folder_patterns: dict, location_files: list[str], ou
         print_info_message('Processing {} split'.format(split))
         
         # Transfer the files to the output folder
-        # save_split(split, files, depth_files, location_df, output_path)
+        save_split(split, files, depth_files, location_df, output_path)
         # print_info_message('Saved {} split at {}'.format(split, os.path.join(output_path, split)))
         
         # Save the csv file
-        output_csv_path = os.path.join(output_path, 'split2/{}.csv'.format(split))
+        output_csv_path = os.path.join(output_path, '{}.csv'.format(split))
         # Instead of using the paths relative to the current directory, we will use the paths relative to the dataset directory
         data_files = [os.path.relpath(f, dataset_path) for f in files]
         depth_data_files = [os.path.relpath(f, dataset_path) for f in depth_files]
