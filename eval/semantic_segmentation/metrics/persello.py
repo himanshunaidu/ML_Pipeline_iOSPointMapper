@@ -195,8 +195,13 @@ class Persello(object):
             regions_overlap, region_matches, pred_region_counts, target_region_counts
         )[1:]
         # Ignore the background label of target_regions
-        print(oversegmentation_errors, undersegmentation_errors)
+        # print(oversegmentation_errors, undersegmentation_errors)
         return oversegmentation_errors.mean().item(), undersegmentation_errors.mean().item()
+
+class PerselloOld(object):
+    def __init__(self, num_classes=21, epsilon=1e-6):
+        self.num_classes = num_classes
+        self.epsilon = epsilon
 
 if __name__=="__main__":
     output: ByteTensor = torch.tensor(np.random.randint(0, 3, (1, 4, 4, 4))).byte()
