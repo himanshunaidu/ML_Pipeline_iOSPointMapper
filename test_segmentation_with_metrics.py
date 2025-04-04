@@ -14,6 +14,8 @@ from eval.semantic_segmentation.metrics.iou import IOU
 from eval.semantic_segmentation.metrics.dice import Dice
 from eval.semantic_segmentation.metrics.persello import Persello
 from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
+from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, idToClassMap
+
 
 def relabel(img):
     '''
@@ -44,6 +46,22 @@ def relabel(img):
     img[img == 255] = 0
     return img
 
+def preprocess_inputs(self, output, target):
+        if isinstance(output, tuple):
+            output = output[0]
+
+        _, pred = torch.max(output, 1)
+
+        if pred.device == torch.device('cuda'):
+            pred = pred.cpu()
+        if target.device == torch.device('cuda'):
+            target = target.cpu()
+        
+        pred = pred.type(torch.ByteTensor)
+        target = target.type(torch.ByteTensor)
+
+        return pred, target
+
 
 def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     im_size = tuple(args.im_size)
@@ -54,6 +72,8 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     union_meter = AverageMeter()
     persello_over_meter = AverageMeter()
     persello_under_meter = AverageMeter()
+    persello_old_over_meter = AverageMeter()
+    persello_old_under_meter = AverageMeter()
 
     miou_class = IOU(num_classes=args.classes)
     persello_class = Persello(num_classes=args.classes, max_regions=1024)
@@ -71,16 +91,31 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
         inputs: torch.Tensor = inputs.to(device=device)
         target: torch.Tensor = target.to(device=device)
 
-        img_out = model(inputs)
+        img_out: torch.Tensor = model(inputs)
 
         # Get the metrics
-        inter, union = miou_class.get_iou(img_out, target)
-        inter_meter.update(inter)
-        union_meter.update(union)
+        for i in range(img_out.shape[0]):
+            input_i = inputs[i].unsqueeze(0)
+            target_i = target[i].unsqueeze(0)
+            img_out_i = img_out[i].unsqueeze(0)
+            inter, union = miou_class.get_iou(img_out_i, target_i)
+            inter_meter.update(inter)
+            union_meter.update(union)
 
-        persello_over, persello_under = persello_class.get_persello(img_out, target)
-        persello_over_meter.update(persello_over)
-        persello_under_meter.update(persello_under)
+            persello_over, persello_under = persello_class.get_persello(img_out_i, target_i)
+            persello_over_meter.update(persello_over)
+            persello_under_meter.update(persello_under)
+
+            # Get old persello metrics
+            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
+            img_out_processed, target_processed = img_out_processed.numpy()[0], target_processed.numpy()[0]
+            persello_old_over, persello_old_under = 0, 0
+            for class_id in idToClassMap.keys():
+                persello_old_over_c, persello_old_under_c = Persello_old(target_processed, img_out_processed, 1)
+                persello_old_over += persello_old_over_c
+                persello_old_under += persello_old_under_c
+            persello_old_over_meter.update(persello_old_over)
+            persello_old_under_meter.update(persello_old_under)
 
         continue
 
@@ -119,11 +154,16 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 
     persello_over = persello_over_meter.sum / (persello_over_meter.count + 1e-10)
     persello_under = persello_under_meter.sum / (persello_under_meter.count + 1e-10)
+
+    persello_old_over = persello_old_over_meter.sum / (persello_old_over_meter.count + 1e-10)
+    persello_old_under = persello_old_under_meter.sum / (persello_old_under_meter.count + 1e-10)
     
     print_info_message('mIoU: {:.4f}'.format(miou))
     print_info_message('mDice: {:.4f}'.format(mdice))
     print_info_message('Persello Over: {:.4f}'.format(persello_over))
     print_info_message('Persello Under: {:.4f}'.format(persello_under))
+    print_info_message('Persello Old Over: {:.4f}'.format(persello_old_over))
+    print_info_message('Persello Old Under: {:.4f}'.format(persello_old_under))
 
 
 
