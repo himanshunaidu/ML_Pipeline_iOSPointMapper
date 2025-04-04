@@ -15,6 +15,7 @@ from eval.semantic_segmentation.metrics.dice import Dice
 from eval.semantic_segmentation.metrics.persello import Persello
 from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
 from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, idToClassMap
+from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
 
 
 def relabel(img):
@@ -72,11 +73,17 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     union_meter = AverageMeter()
     persello_over_meter = AverageMeter()
     persello_under_meter = AverageMeter()
+    romrum_over_meter = AverageMeter()
+    romrum_under_meter = AverageMeter()
+
     persello_old_over_meter = AverageMeter()
     persello_old_under_meter = AverageMeter()
+    romrum_old_over_meter = AverageMeter()
+    romrum_old_under_meter = AverageMeter()
 
     miou_class = IOU(num_classes=args.classes)
     persello_class = Persello(num_classes=args.classes, max_regions=1024)
+    romrum_class = ROMRUM(num_classes=args.classes, max_regions=1024)
 
     # get color map for pascal dataset
     if args.dataset == 'pascal':
@@ -106,16 +113,26 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             persello_over_meter.update(persello_over)
             persello_under_meter.update(persello_under)
 
+            romrum_over, romrum_under = romrum_class.get_rom_rum(img_out_i, target_i)
+            romrum_over_meter.update(romrum_over)
+            romrum_under_meter.update(romrum_under)
+
             # Get old persello metrics
             img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
             img_out_processed, target_processed = img_out_processed.numpy()[0], target_processed.numpy()[0]
             persello_old_over, persello_old_under = 0, 0
+            romrum_old_over, romrum_old_under = 0, 0
             for class_id in idToClassMap.keys():
                 persello_old_over_c, persello_old_under_c = Persello_old(target_processed, img_out_processed, 1)
                 persello_old_over += persello_old_over_c
                 persello_old_under += persello_old_under_c
+                romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_processed, img_out_processed, 1)
+                romrum_old_over += romrum_old_over_c
+                romrum_old_under += romrum_old_under_c
             persello_old_over_meter.update(persello_old_over/len(idToClassMap.keys()))
             persello_old_under_meter.update(persello_old_under/len(idToClassMap.keys()))
+            romrum_old_over_meter.update(romrum_old_over/len(idToClassMap.keys()))
+            romrum_old_under_meter.update(romrum_old_under/len(idToClassMap.keys()))
 
         continue
 
@@ -154,16 +171,25 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 
     persello_over = persello_over_meter.sum / (persello_over_meter.count + 1e-10)
     persello_under = persello_under_meter.sum / (persello_under_meter.count + 1e-10)
+    romrum_over = romrum_over_meter.sum / (romrum_over_meter.count + 1e-10)
+    romrum_under = romrum_under_meter.sum / (romrum_under_meter.count + 1e-10)
 
     persello_old_over = persello_old_over_meter.sum / (persello_old_over_meter.count + 1e-10)
     persello_old_under = persello_old_under_meter.sum / (persello_old_under_meter.count + 1e-10)
+    romrum_old_over = romrum_old_over_meter.sum / (romrum_old_over_meter.count + 1e-10)
+    romrum_old_under = romrum_old_under_meter.sum / (romrum_old_under_meter.count + 1e-10)
     
     print_info_message('mIoU: {:.4f}'.format(miou))
     print_info_message('mDice: {:.4f}'.format(mdice))
     print_info_message('Persello Over: {:.4f}'.format(persello_over))
     print_info_message('Persello Under: {:.4f}'.format(persello_under))
+    print_info_message('ROM Over: {:.4f}'.format(romrum_over))
+    print_info_message('ROM Under: {:.4f}'.format(romrum_under))
+
     print_info_message('Persello Old Over: {:.4f}'.format(persello_old_over))
     print_info_message('Persello Old Under: {:.4f}'.format(persello_old_under))
+    print_info_message('ROM Old Over: {:.4f}'.format(romrum_old_over))
+    print_info_message('ROM Old Under: {:.4f}'.format(romrum_old_under))
 
 
 
@@ -198,7 +224,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(1000))
+    dataset = torch.utils.data.Subset(dataset, range(100))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
 

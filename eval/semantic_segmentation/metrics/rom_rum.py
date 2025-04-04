@@ -25,8 +25,7 @@ class ROMRUM(object):
         if isinstance(output, tuple):
             output = output[0]
 
-        # _, pred = torch.max(output, 1)
-        pred = output
+        _, pred = torch.max(output, 1)
 
         if pred.device == torch.device('cuda'):
             pred = pred.cpu()
