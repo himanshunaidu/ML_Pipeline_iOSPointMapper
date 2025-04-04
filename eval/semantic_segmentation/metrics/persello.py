@@ -52,6 +52,7 @@ class Persello(object):
     def get_region_class_map(self, img: Tensor, regions: Tensor, region_bin_counts: Tensor):
         """
         Get the mapping of region labels to class labels.
+        Helps get the class to which the region belongs to.
         Do this by getting the pixel value of the image at the region label.
 
         The region_bin_counts tensor is used to get the number of regions in the segmentation.
@@ -72,6 +73,8 @@ class Persello(object):
         - Get a new tensor where each index gives us the value at the same index in pred_regions and target_regions.
         - Get the bin counts of the indices tensor.
         - Reshape the indices_bin_counts tensor to get the overlap tensor.
+
+        Takes advantage of the fact that the region labels are contiguous and start from 0 (0 is the background label).
         
         Parameters:
         ----------

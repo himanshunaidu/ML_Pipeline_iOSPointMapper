@@ -114,8 +114,8 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
                 persello_old_over_c, persello_old_under_c = Persello_old(target_processed, img_out_processed, 1)
                 persello_old_over += persello_old_over_c
                 persello_old_under += persello_old_under_c
-            persello_old_over_meter.update(persello_old_over)
-            persello_old_under_meter.update(persello_old_under)
+            persello_old_over_meter.update(persello_old_over/len(idToClassMap.keys()))
+            persello_old_under_meter.update(persello_old_under/len(idToClassMap.keys()))
 
         continue
 
@@ -198,7 +198,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(100))
+    dataset = torch.utils.data.Subset(dataset, range(1000))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
 
