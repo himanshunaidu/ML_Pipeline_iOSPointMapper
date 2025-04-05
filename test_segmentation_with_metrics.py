@@ -1,6 +1,7 @@
 import torch
 import glob
 import os
+import math
 from argparse import ArgumentParser
 from PIL import Image
 from torchvision.transforms import functional as F
@@ -123,16 +124,16 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             persello_old_over, persello_old_under = 0, 0
             romrum_old_over, romrum_old_under = 0, 0
             for class_id in idToClassMap.keys():
-                persello_old_over_c, persello_old_under_c = Persello_old(target_processed, img_out_processed, 1)
+                persello_old_over_c, persello_old_under_c = Persello_old(target_processed, img_out_processed, class_id)
                 persello_old_over += persello_old_over_c
                 persello_old_under += persello_old_under_c
-                romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_processed, img_out_processed, 1)
+                romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_processed, img_out_processed, class_id)
                 romrum_old_over += romrum_old_over_c
                 romrum_old_under += romrum_old_under_c
             persello_old_over_meter.update(persello_old_over/len(idToClassMap.keys()))
             persello_old_under_meter.update(persello_old_under/len(idToClassMap.keys()))
-            romrum_old_over_meter.update(romrum_old_over/len(idToClassMap.keys()))
-            romrum_old_under_meter.update(romrum_old_under/len(idToClassMap.keys()))
+            romrum_old_over_meter.update(math.tanh(romrum_old_over))#/len(idToClassMap.keys()))
+            romrum_old_under_meter.update(math.tanh(romrum_old_under))#/len(idToClassMap.keys()))
 
         continue
 
@@ -224,7 +225,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(100))
+    dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
 

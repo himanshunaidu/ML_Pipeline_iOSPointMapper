@@ -79,6 +79,8 @@ class ROMRUM(object):
         - Get a new tensor where each index gives us the value at the same index in pred_regions and target_regions.
         - Get the bin counts of the indices tensor.
         - Reshape the indices_bin_counts tensor to get the overlap tensor.
+
+        Takes advantage of the fact that the region labels are contiguous and start from 0 (0 is the background label).
         
         Parameters:
         ----------
@@ -161,11 +163,14 @@ class ROMRUM(object):
         # First get the ground-truth regions that have more than one predicted region overlapping with them.
         target_os = torch.sum(torch.where(regions_overlap >= 1, 1, 0), dim=1)
         # Then get the predicted regions that overlap with any ground-truth region that is over-segmented.
+        # NOTE: Thanks to broadcasting, the following multiplication of shapes
+        #  (num_target_regions,) and (num_target_regions, num_pred_regions) gives us a valid result.
         pred_os = (target_os > 1).float() @ (regions_overlap >= 1).float()
         # Calculate the ROM while ignoring the background label
+        # NOTE: The background label is always at index 0, so we can ignore it by starting from index 1.
         ror = (torch.sum(target_os[1:]) / (len(target_region_counts)-1)) * \
             (torch.sum(pred_os[1:]) / (len(pred_region_counts)-1))
-        mo = torch.sum(torch.max(torch.tensor([0]), target_os[1:] - 1))
+        mo = torch.sum(torch.max(torch.tensor([0]), target_os[1:] - 1)) / (len(target_region_counts)-1)
         rom = math.tanh(ror * mo)
 
         # Get RUM
@@ -176,7 +181,7 @@ class ROMRUM(object):
         # Calculate the RUM
         rur = (torch.sum(pred_us[1:]) / (len(pred_region_counts)-1)) * \
             (torch.sum(target_us[1:]) / (len(target_region_counts)-1))
-        mu = torch.sum(torch.max(torch.tensor([0]), pred_us[1:] - 1))
+        mu = torch.sum(torch.max(torch.tensor([0]), pred_us[1:] - 1)) / (len(pred_region_counts)-1)
         rum = math.tanh(rur * mu)
 
         return rom, rum
