@@ -7,15 +7,11 @@ import time
 class Persello(object):
     """
     Helps to calculate the Persello metric for semantic segmentation.
-
-    Assumes that there are at maximum 255 regions in the segmentation.
-
-    TODO: Need to find a way to remove the background label from the persello calculation.
-    Would probably be better to do so in the filter_regions_overlap method.
     """
-    def __init__(self, num_classes=21, epsilon=1e-6):
+    def __init__(self, num_classes=21, epsilon=1e-6, max_regions=255):
         self.num_classes = num_classes
         self.epsilon = epsilon
+        self.max_regions = max_regions
 
     def preprocess_inputs(self, output, target):
         if isinstance(output, tuple):
@@ -50,12 +46,13 @@ class Persello(object):
         img_numpy = img_numpy.astype(np.uint8)
         regions = label(img_numpy, background=background_label)
         # Truncate the regions to 255
-        regions[regions > 255] = 255
+        regions[regions > self.max_regions] = self.max_regions
         return torch.from_numpy(regions)
 
     def get_region_class_map(self, img: Tensor, regions: Tensor, region_bin_counts: Tensor):
         """
         Get the mapping of region labels to class labels.
+        Helps get the class to which the region belongs to.
         Do this by getting the pixel value of the image at the region label.
 
         The region_bin_counts tensor is used to get the number of regions in the segmentation.
@@ -76,6 +73,8 @@ class Persello(object):
         - Get a new tensor where each index gives us the value at the same index in pred_regions and target_regions.
         - Get the bin counts of the indices tensor.
         - Reshape the indices_bin_counts tensor to get the overlap tensor.
+
+        Takes advantage of the fact that the region labels are contiguous and start from 0 (0 is the background label).
         
         Parameters:
         ----------
@@ -199,8 +198,13 @@ class Persello(object):
             regions_overlap, region_matches, pred_region_counts, target_region_counts
         )[1:]
         # Ignore the background label of target_regions
-        print(oversegmentation_errors, undersegmentation_errors)
+        # print(oversegmentation_errors, undersegmentation_errors)
         return oversegmentation_errors.mean().item(), undersegmentation_errors.mean().item()
+
+class PerselloOld(object):
+    def __init__(self, num_classes=21, epsilon=1e-6):
+        self.num_classes = num_classes
+        self.epsilon = epsilon
 
 if __name__=="__main__":
     output: ByteTensor = torch.tensor(np.random.randint(0, 3, (1, 4, 4, 4))).byte()

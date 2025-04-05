@@ -8,20 +8,24 @@ class ROMRUM(object):
     """
     Helps to calculate the Region-wise over-segmentation measure (ROM) and region-wise under-segmentation measure (RUM).
 
-    Assumes that there are at maximum 255 regions in the segmentation.
+    Parameters:
+    -----------
+    num_classes: int
+        The number of classes in the segmentation.
 
-    TODO: Need to find a way to remove the background label from the persello calculation.
-    Would probably be better to do so in the filter_regions_overlap method.
+    max_regions: int
+        The maximum number of regions that can be practically present in the segmentation.
+        (Will ignore regions beyond this number)
     """
-    def __init__(self, num_classes=21):
+    def __init__(self, num_classes=21, max_regions=255):
         self.num_classes = num_classes
+        self.max_regions = max_regions
 
     def preprocess_inputs(self, output, target):
         if isinstance(output, tuple):
             output = output[0]
 
-        # _, pred = torch.max(output, 1)
-        pred = output
+        _, pred = torch.max(output, 1)
 
         if pred.device == torch.device('cuda'):
             pred = pred.cpu()
@@ -49,8 +53,8 @@ class ROMRUM(object):
         img_numpy = img.numpy()
         img_numpy = img_numpy.astype(np.uint8)
         regions = label(img_numpy, background=background_label)
-        # Truncate the regions to 255
-        regions[regions > 255] = 255
+        # Truncate the regions to the maximum number of regions
+        regions[regions > self.max_regions] = self.max_regions
         return torch.from_numpy(regions)
 
     def get_region_class_map(self, img: Tensor, regions: Tensor, region_bin_counts: Tensor):
@@ -75,6 +79,8 @@ class ROMRUM(object):
         - Get a new tensor where each index gives us the value at the same index in pred_regions and target_regions.
         - Get the bin counts of the indices tensor.
         - Reshape the indices_bin_counts tensor to get the overlap tensor.
+
+        Takes advantage of the fact that the region labels are contiguous and start from 0 (0 is the background label).
         
         Parameters:
         ----------
@@ -157,8 +163,11 @@ class ROMRUM(object):
         # First get the ground-truth regions that have more than one predicted region overlapping with them.
         target_os = torch.sum(torch.where(regions_overlap >= 1, 1, 0), dim=1)
         # Then get the predicted regions that overlap with any ground-truth region that is over-segmented.
+        # NOTE: Thanks to broadcasting, the following multiplication of shapes
+        #  (num_target_regions,) and (num_target_regions, num_pred_regions) gives us a valid result.
         pred_os = (target_os > 1).float() @ (regions_overlap >= 1).float()
         # Calculate the ROM while ignoring the background label
+        # NOTE: The background label is always at index 0, so we can ignore it by starting from index 1.
         ror = (torch.sum(target_os[1:]) / (len(target_region_counts)-1)) * \
             (torch.sum(pred_os[1:]) / (len(pred_region_counts)-1))
         mo = torch.sum(torch.max(torch.tensor([0]), target_os[1:] - 1))
@@ -202,5 +211,5 @@ if __name__=="__main__":
         [3, 3, 3, 3, 255, 255, 255, 255]
     ]).byte()
 
-    persello = ROMRUM()
-    print(persello.get_rom_rum(output, target))
+    romrum = ROMRUM()
+    print(romrum.get_rom_rum(output, target))
