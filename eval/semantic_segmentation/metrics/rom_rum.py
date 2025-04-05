@@ -170,7 +170,7 @@ class ROMRUM(object):
         # NOTE: The background label is always at index 0, so we can ignore it by starting from index 1.
         ror = (torch.sum(target_os[1:]) / (len(target_region_counts)-1)) * \
             (torch.sum(pred_os[1:]) / (len(pred_region_counts)-1))
-        mo = torch.sum(torch.max(torch.tensor([0]), target_os[1:] - 1)) / (len(target_region_counts)-1)
+        mo = torch.sum(torch.max(torch.tensor([0]), target_os[1:] - 1))
         rom = math.tanh(ror * mo)
 
         # Get RUM
@@ -181,7 +181,7 @@ class ROMRUM(object):
         # Calculate the RUM
         rur = (torch.sum(pred_us[1:]) / (len(pred_region_counts)-1)) * \
             (torch.sum(target_us[1:]) / (len(target_region_counts)-1))
-        mu = torch.sum(torch.max(torch.tensor([0]), pred_us[1:] - 1)) / (len(pred_region_counts)-1)
+        mu = torch.sum(torch.max(torch.tensor([0]), pred_us[1:] - 1))
         rum = math.tanh(rur * mu)
 
         return rom, rum

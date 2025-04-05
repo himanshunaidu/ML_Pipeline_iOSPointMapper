@@ -135,36 +135,6 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             romrum_old_over_meter.update(math.tanh(romrum_old_over))#/len(idToClassMap.keys()))
             romrum_old_under_meter.update(math.tanh(romrum_old_under))#/len(idToClassMap.keys()))
 
-        continue
-
-        img_out = img_out.squeeze(0)  # remove the batch dimension
-        img_out = img_out.max(0)[1].byte()  # get the label map
-        img_out = img_out.to(device='cpu').numpy()
-
-        if args.dataset == 'city':
-            # cityscape uses different IDs for training and testing
-            # so, change from Train IDs to actual IDs
-            img_out = relabel(img_out)
-        elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-            # edge mapping dataset uses different IDs for training and testing
-            # so, change from Train IDs to actual IDs
-            # Same as cityscape dataset
-            img_out = relabel(img_out)
-
-        img_out = Image.fromarray(img_out)
-        # resize to original size
-        # img_out = img_out.resize((w, h), Image.NEAREST)
-
-        # pascal dataset accepts colored segmentations
-        if args.dataset == 'pascal':
-            img_out.putpalette(cmap)
-
-        # save the segmentation mask
-        # name = imgName.split('/')[-1]
-        # img_extn = imgName.split('.')[-1]
-        # name = '{}/{}'.format(args.savedir, name.replace(img_extn, 'png'))
-        # img_out.save(name) # MARK: Commented out because we are only interested in the metrics
-
     iou = inter_meter.sum / (union_meter.sum + 1e-10)
     dice = 2 * inter_meter.sum / (inter_meter.sum + union_meter.sum + 1e-10)
     miou = iou.mean()
