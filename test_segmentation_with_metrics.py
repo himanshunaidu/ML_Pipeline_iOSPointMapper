@@ -74,13 +74,21 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     batch_time = AverageMeter()
     inter_meter = AverageMeter()
     union_meter = AverageMeter()
+    persello_over_list = []
+    persello_under_list = []
     persello_over_meter = AverageMeter()
     persello_under_meter = AverageMeter()
+    romrum_over_list = []
+    romrum_under_list = []
     romrum_over_meter = AverageMeter()
     romrum_under_meter = AverageMeter()
 
+    persello_old_over_list = []
+    persello_old_under_list = []
     persello_old_over_meter = AverageMeter()
     persello_old_under_meter = AverageMeter()
+    romrum_old_over_list = []
+    romrum_old_under_list = []
     romrum_old_over_meter = AverageMeter()
     romrum_old_under_meter = AverageMeter()
 
@@ -125,12 +133,16 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 
             start_time = time.time()
             persello_over, persello_under = persello_class.get_persello(img_out_i, target_i)
+            persello_over_list.append(persello_over)
+            persello_under_list.append(persello_under)
             persello_over_meter.update(persello_over)
             persello_under_meter.update(persello_under)
             persello_times.append(time.time() - start_time)
 
             start_time = time.time()
             romrum_over, romrum_under = romrum_class.get_rom_rum(img_out_i, target_i)
+            romrum_over_list.append(romrum_over)
+            romrum_under_list.append(romrum_under)
             romrum_over_meter.update(romrum_over)
             romrum_under_meter.update(romrum_under)
             romrum_times.append(time.time() - start_time)
@@ -145,6 +157,8 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
                 persello_old_over_c, persello_old_under_c = Persello_old(target_processed, img_out_processed, class_id)
                 persello_old_over += persello_old_over_c
                 persello_old_under += persello_old_under_c
+            persello_old_over_list.append(persello_old_over)
+            persello_old_under_list.append(persello_old_under)
             persello_old_over_meter.update(persello_old_over/len(idToClassMap.keys()))
             persello_old_under_meter.update(persello_old_under/len(idToClassMap.keys()))
             persello_old_times.append(time.time() - start_time)
@@ -155,6 +169,8 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
                 romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_processed, img_out_processed, class_id)
                 romrum_old_over += romrum_old_over_c
                 romrum_old_under += romrum_old_under_c
+            romrum_old_over_list.append(romrum_old_over)
+            romrum_old_under_list.append(romrum_old_under)
             romrum_old_over_meter.update(math.tanh(romrum_old_over))#/len(idToClassMap.keys()))
             romrum_old_under_meter.update(math.tanh(romrum_old_under))#/len(idToClassMap.keys()))
             romrum_old_times.append(time.time() - start_time)
@@ -178,15 +194,15 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     save_object = {
         'mIoU': miou.item(),
         'mDice': mdice.item(),
-        'Persello Over': persello_over,
-        'Persello Under': persello_under,
-        'ROM Over': romrum_over,
-        'ROM Under': romrum_under,
+        # 'Persello Over': persello_over_list,
+        # 'Persello Under': persello_under_list,
+        'ROM Over': romrum_over_list,
+        'ROM Under': romrum_under_list,
 
-        'Persello Old Over': persello_old_over,
-        'Persello Old Under': persello_old_under,
-        'ROM Old Over': romrum_old_over,
-        'ROM Old Under': romrum_old_under,
+        # 'Persello Old Over': persello_old_over_list,
+        # 'Persello Old Under': persello_old_under_list,
+        'ROM Old Over': romrum_old_over_list,
+        'ROM Old Under': romrum_old_under_list,
 
         'mIoU time': miou_times,
         'Persello time': persello_times,
@@ -230,9 +246,10 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(1))
+    dataset = torch.utils.data.Subset(dataset, range(150))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
+    print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
 
     if args.model == 'espnetv2':
         from model.semantic_segmentation.espnetv2.espnetv2 import espnetv2_seg
