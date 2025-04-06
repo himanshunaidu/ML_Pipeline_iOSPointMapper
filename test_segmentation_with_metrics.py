@@ -1,8 +1,10 @@
 import torch
 import glob
 import os
+import json
 import math
 from argparse import ArgumentParser
+import time
 from PIL import Image
 from torchvision.transforms import functional as F
 from tqdm import tqdm
@@ -86,6 +88,14 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     persello_class = Persello(num_classes=args.classes, max_regions=1024)
     romrum_class = ROMRUM(num_classes=args.classes, max_regions=1024)
 
+    # To record time taken for each metric
+    start_time = 0
+    miou_times = []
+    persello_times = []
+    romrum_times = []
+    persello_old_times = []
+    romrum_old_times = []
+
     # get color map for pascal dataset
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
@@ -106,34 +116,48 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             input_i = inputs[i].unsqueeze(0)
             target_i = target[i].unsqueeze(0)
             img_out_i = img_out[i].unsqueeze(0)
+
+            start_time = time.time()
             inter, union = miou_class.get_iou(img_out_i, target_i)
             inter_meter.update(inter)
             union_meter.update(union)
+            miou_times.append(time.time() - start_time)
 
+            start_time = time.time()
             persello_over, persello_under = persello_class.get_persello(img_out_i, target_i)
             persello_over_meter.update(persello_over)
             persello_under_meter.update(persello_under)
+            persello_times.append(time.time() - start_time)
 
+            start_time = time.time()
             romrum_over, romrum_under = romrum_class.get_rom_rum(img_out_i, target_i)
             romrum_over_meter.update(romrum_over)
             romrum_under_meter.update(romrum_under)
+            romrum_times.append(time.time() - start_time)
 
             # Get old persello metrics
             img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
             img_out_processed, target_processed = img_out_processed.numpy()[0], target_processed.numpy()[0]
+
+            start_time = time.time()
             persello_old_over, persello_old_under = 0, 0
-            romrum_old_over, romrum_old_under = 0, 0
             for class_id in idToClassMap.keys():
                 persello_old_over_c, persello_old_under_c = Persello_old(target_processed, img_out_processed, class_id)
                 persello_old_over += persello_old_over_c
                 persello_old_under += persello_old_under_c
+            persello_old_over_meter.update(persello_old_over/len(idToClassMap.keys()))
+            persello_old_under_meter.update(persello_old_under/len(idToClassMap.keys()))
+            persello_old_times.append(time.time() - start_time)
+
+            start_time = time.time()
+            romrum_old_over, romrum_old_under = 0, 0
+            for class_id in idToClassMap.keys():
                 romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_processed, img_out_processed, class_id)
                 romrum_old_over += romrum_old_over_c
                 romrum_old_under += romrum_old_under_c
-            persello_old_over_meter.update(persello_old_over/len(idToClassMap.keys()))
-            persello_old_under_meter.update(persello_old_under/len(idToClassMap.keys()))
             romrum_old_over_meter.update(math.tanh(romrum_old_over))#/len(idToClassMap.keys()))
             romrum_old_under_meter.update(math.tanh(romrum_old_under))#/len(idToClassMap.keys()))
+            romrum_old_times.append(time.time() - start_time)
 
     iou = inter_meter.sum / (union_meter.sum + 1e-10)
     dice = 2 * inter_meter.sum / (inter_meter.sum + union_meter.sum + 1e-10)
@@ -149,20 +173,31 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     persello_old_under = persello_old_under_meter.sum / (persello_old_under_meter.count + 1e-10)
     romrum_old_over = romrum_old_over_meter.sum / (romrum_old_over_meter.count + 1e-10)
     romrum_old_under = romrum_old_under_meter.sum / (romrum_old_under_meter.count + 1e-10)
-    
-    print_info_message('mIoU: {:.4f}'.format(miou))
-    print_info_message('mDice: {:.4f}'.format(mdice))
-    print_info_message('Persello Over: {:.4f}'.format(persello_over))
-    print_info_message('Persello Under: {:.4f}'.format(persello_under))
-    print_info_message('ROM Over: {:.4f}'.format(romrum_over))
-    print_info_message('ROM Under: {:.4f}'.format(romrum_under))
 
-    print_info_message('Persello Old Over: {:.4f}'.format(persello_old_over))
-    print_info_message('Persello Old Under: {:.4f}'.format(persello_old_under))
-    print_info_message('ROM Old Over: {:.4f}'.format(romrum_old_over))
-    print_info_message('ROM Old Under: {:.4f}'.format(romrum_old_under))
+    # Save the results
+    save_object = {
+        'mIoU': miou.item(),
+        'mDice': mdice.item(),
+        'Persello Over': persello_over,
+        'Persello Under': persello_under,
+        'ROM Over': romrum_over,
+        'ROM Under': romrum_under,
 
+        'Persello Old Over': persello_old_over,
+        'Persello Old Under': persello_old_under,
+        'ROM Old Over': romrum_old_over,
+        'ROM Old Under': romrum_old_under,
 
+        'mIoU time': miou_times,
+        'Persello time': persello_times,
+        'ROM time': romrum_times,
+        'Persello Old time': persello_old_times,
+        'ROM Old time': romrum_old_times,
+    }
+    save_path = os.path.join(args.savedir, 'metrics.json')
+    with open(save_path, 'w') as f:
+        json.dump(save_object, f, indent=4)
+    print_info_message('Metrics saved to {}'.format(save_path))
 
 def main(args):
     # read all the images in the folder
@@ -195,7 +230,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(10))
+    dataset = torch.utils.data.Subset(dataset, range(1))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
 
@@ -225,6 +260,9 @@ def main(args):
     device = 'cuda' if num_gpus > 0 else 'cpu'
     model = model.to(device=device)
 
+    if not os.path.isdir(args.savedir):
+        os.makedirs(args.savedir)
+
     evaluate(args, model, dataset_loader, device=device)
 
 
@@ -250,6 +288,7 @@ if __name__ == '__main__':
     parser.add_argument('--channels', default=3, type=int, help='Input channels')
     parser.add_argument('--num-classes', default=1000, type=int,
                         help='ImageNet classes. Required for loading the base network')
+    parser.add_argument('--savedir', type=str, default='./results_segmentation_test', help='Location to save the results')
 
     args = parser.parse_args()
 
@@ -266,11 +305,11 @@ if __name__ == '__main__':
 
     # set-up results path
     if args.dataset == 'city':
-        args.savedir = 'results/{}_{}_{}'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-        args.savedir = 'results/{}_{}/{}'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
-        args.savedir = 'results/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
 
@@ -280,5 +319,9 @@ if __name__ == '__main__':
     # This key is used to load the ImageNet weights while training. So, set to empty to avoid errors
     args.weights = ''
     args.im_size = tuple(args.im_size)
+
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    args.savedir = '{}/model_{}_{}/split_{}/s_{}_sc_{}_{}/{}'.format(args.savedir, args.model, args.dataset, args.split,
+                                                                     args.s, args.im_size[0], args.im_size[1], timestr)
 
     main(args)

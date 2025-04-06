@@ -13,6 +13,7 @@
 /results/*
 !/results/.gitkeep
 /results_segmentation/*
+/results_test/*
 
 # Note: The following content has been pulled from https://github.com/jupyter/notebook
 *.bundle.*
