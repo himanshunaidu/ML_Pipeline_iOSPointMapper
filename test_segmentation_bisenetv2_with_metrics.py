@@ -221,7 +221,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(150))
+    # dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
@@ -232,8 +232,9 @@ def main(args):
         model = espnetv2_seg(args)
     elif args.model == 'bisenetv2':
         from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
+        seg_classes = seg_classes - 1 if args.dataset == 'city' else seg_classes # Because the background class is not used in the model
         args.classes = seg_classes
-        model = BiSeNetV2(n_classes=args.classes, aux_mode='pred')
+        model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
     else:
         print_error_message('{} network not yet supported'.format(args.model))
         exit(-1)
@@ -247,7 +248,7 @@ def main(args):
     if args.weights_test:
         print_info_message('Loading model weights')
         weight_dict = torch.load(args.weights_test, map_location=torch.device('cpu'))
-        model.load_state_dict(weight_dict)
+        model.load_state_dict(weight_dict, strict=False if args.model == 'bisenetv2' else True)
         print_info_message('Weight loaded successfully')
     else:
         print_error_message('weight file does not exist or not specified. Please check: {}', format(args.weights_test))
