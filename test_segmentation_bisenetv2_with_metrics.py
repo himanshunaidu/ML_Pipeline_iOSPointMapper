@@ -194,8 +194,8 @@ def main(args):
     # read all the images in the folder
     if args.dataset == 'city':
         from data_loader.semantic_segmentation.cityscapes import CityscapesSegmentation, CITYSCAPE_CLASS_LIST
-        dataset = CityscapesSegmentation(root=args.data_path, train=False, size=args.im_size, scale=args.s,
-                                             coarse=False)
+        dataset = CityscapesSegmentation(root=args.data_path, train=(args.split == "train"), size=args.im_size, scale=args.s,
+                                             coarse=False, split=args.split)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
         image_path = os.path.join(args.data_path, "rgb", "*.png")
@@ -278,7 +278,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', default='city', choices=segmentation_datasets, help='Dataset name')
     # input details
     parser.add_argument('--im-size', type=int, nargs="+", default=[512, 256], help='Image size for testing (W x H)')
-    parser.add_argument('--split', default='val', choices=['val', 'test'], help='data split')
+    parser.add_argument('--split', default='val', choices=['train', 'val', 'test'], help='data split')
     parser.add_argument('--batch-size', type=int, default=4, help='list of batch sizes')
     parser.add_argument('--model-width', default=224, type=int, help='Model width')
     parser.add_argument('--model-height', default=224, type=int, help='Model height')

@@ -69,5 +69,6 @@ def main(cityscapesPath, split):
 
 if __name__ == '__main__':
     cityscapes_path = '../../../datasets/cityscapes/'
-    main(cityscapes_path, "train")
-    main(cityscapes_path, "val")
+    # main(cityscapes_path, "train")
+    # main(cityscapes_path, "val")
+    # main(cityscapes_path, "test")
