@@ -7,7 +7,7 @@
 # segmentation related details
 segmentation_schedulers = ['poly', 'fixed', 'clr', 'linear', 'hybrid']
 segmentation_datasets = ['pascal', 'city', 'edge_mapping']
-segmentation_models = ['espnetv2']
+segmentation_models = ['espnetv2', 'bisenetv2']
 segmentation_loss_fns = ['ce', 'bce']
 
 
