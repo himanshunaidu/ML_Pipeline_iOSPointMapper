@@ -113,7 +113,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 
     model.eval()
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
-    for i, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
+    for index, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
         inputs: torch.Tensor = inputs.to(device=device)
         target: torch.Tensor = target.to(device=device)
 
