@@ -1,4 +1,6 @@
 # Package Specific
+command
+
 ## Data Loader
 /data_loader/dump/
 /datasets/
@@ -6,7 +8,7 @@
 /train/dump/
 
 ## Model
-/model/semantic_segmentation/model_zoo/espnetv2/*.pth
+/model/semantic_segmentation/model_zoo/*/*.pth
 /model/semantic_segmentation/espnetv2/classification_submodule/model_zoo/*.pth
 
 ## Results

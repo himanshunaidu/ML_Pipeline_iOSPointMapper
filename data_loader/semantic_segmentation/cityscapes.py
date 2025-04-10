@@ -12,7 +12,11 @@ CITYSCAPE_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
 
 class CityscapesSegmentation(data.Dataset):
 
-    def __init__(self, root, train=True, scale=(0.5, 2.0), size=(1024, 512), ignore_idx=255, coarse=True):
+    def __init__(self, root, train=True, scale=(0.5, 2.0), size=(1024, 512), ignore_idx=255, coarse=True,
+                 split = 'train'):
+        """
+        Note: The split argument was added only recently. Will need to be incorporated more properly. 
+        """
 
         self.train = train
         if self.train:
@@ -20,7 +24,10 @@ class CityscapesSegmentation(data.Dataset):
             if coarse:
                 coarse_data_file = os.path.join(root, 'train_coarse.txt')
         else:
-            data_file = os.path.join(root, 'val.txt')
+            if split == 'val':
+                data_file = os.path.join(root, 'val.txt')
+            else:
+                data_file = os.path.join(root, 'test.txt')
 
         self.images = []
         self.masks = []

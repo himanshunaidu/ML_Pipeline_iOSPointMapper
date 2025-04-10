@@ -57,7 +57,7 @@ def evaluate(args, model, image_list, device):
         cmap = None
 
     model.eval()
-    for i, imgName in tqdm(enumerate(image_list)):
+    for index, imgName in tqdm(enumerate(image_list)):
         img = Image.open(imgName).convert('RGB')
         w, h = img.size
 
