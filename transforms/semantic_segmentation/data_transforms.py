@@ -53,6 +53,15 @@ class Normalize(object):
         rgb_img = F.normalize(rgb_img, MEAN, STD) # normalize the tensor
         label_img = torch.LongTensor(np.array(label_img).astype(np.int64))
         return rgb_img, label_img
+    
+class Identity(object):
+    '''
+        Identity transform
+    '''
+    def __call__(self, rgb_img, label_img):
+        rgb_img = F.to_tensor(rgb_img) # convert to tensor (values between 0 and 1)
+        label_img = torch.LongTensor(np.array(label_img).astype(np.int64))
+        return rgb_img, label_img
 
 
 class RandomFlip(object):

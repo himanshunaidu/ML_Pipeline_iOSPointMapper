@@ -3,7 +3,7 @@ import torch.utils.data as data
 import os
 from PIL import Image
 from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose
-from transforms.semantic_segmentation.data_transforms import VerticalHalfCrop
+from transforms.semantic_segmentation.data_transforms import VerticalHalfCrop, Identity
 
 CITYSCAPE_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
@@ -19,12 +19,13 @@ class CityscapesSegmentation(data.Dataset):
         """
 
         self.train = train
+        self.split = split
         if self.train:
             data_file = os.path.join(root, 'train.txt')
             if coarse:
                 coarse_data_file = os.path.join(root, 'train_coarse.txt')
         else:
-            if split == 'val':
+            if self.split == 'val':
                 data_file = os.path.join(root, 'val.txt')
             else:
                 data_file = os.path.join(root, 'test.txt')
@@ -63,7 +64,7 @@ class CityscapesSegmentation(data.Dataset):
         else:
             self.scale = (scale, scale)
 
-        self.train_transforms, self.val_transforms = self.transforms()
+        self.train_transforms, self.val_transforms, self.test_transforms = self.transforms()
         self.ignore_idx = ignore_idx
 
     def transforms(self):
@@ -81,7 +82,13 @@ class CityscapesSegmentation(data.Dataset):
                 Normalize()
             ]
         )
-        return train_transforms, val_transforms
+        test_transforms = Compose(
+            [
+                Resize(size=self.size),
+                Identity()
+            ]
+        )
+        return train_transforms, val_transforms, test_transforms
 
     def __len__(self):
         return len(self.images)
@@ -90,10 +97,12 @@ class CityscapesSegmentation(data.Dataset):
         rgb_img = Image.open(self.images[index]).convert('RGB')
         label_img = Image.open(self.masks[index])
 
-        if self.train:
+        if self.split == 'train':
             rgb_img, label_img = self.train_transforms(rgb_img, label_img)
+        # elif self.split == 'val':
+        #     rgb_img, label_img = self.val_transforms(rgb_img, label_img)
         else:
-            rgb_img, label_img = self.val_transforms(rgb_img, label_img)
+            rgb_img, label_img = self.test_transforms(rgb_img, label_img)
 
         return rgb_img, label_img
 
