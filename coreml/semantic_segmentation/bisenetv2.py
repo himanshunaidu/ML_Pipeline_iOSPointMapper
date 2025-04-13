@@ -8,13 +8,16 @@ import os.path as osp
 import sys
 sys.path.insert(0, '.')
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torchvision
 import json
 import cv2
+from PIL import Image
 
 from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
+from transforms.semantic_segmentation.data_transforms import ToTensor
 
 import coremltools as ct
 
@@ -53,3 +56,35 @@ if __name__ == '__main__':
             default='model.mlpackage')
     parser.add_argument('--img-path', dest='img_path', type=str, default='./datasets/custom_images/test.jpg',)
     args = parser.parse_args()
+
+    # Prepare data
+    to_tensor = ToTensor(
+        # mean=(0.3257, 0.3690, 0.3223), # city, rgb
+        # std=(0.2112, 0.2148, 0.2115),
+        mean=(0.0, 0.0, 0.0), # placeholder
+        std=(1.0, 1.0, 1.0),
+    )
+    scale = 1/(0.2125*255.0)
+    bias = [- 0.3257/(0.2112) , - 0.3690/(0.2148), - 0.3223/(0.2115)]
+    print('Loading image:', args.img_path)
+    im = cv2.imread(args.img_path)#[:, :, ::-1]
+    # Resize
+    im = cv2.resize(im, (512, 256))
+    empty_label = np.zeros(im.shape[:2], dtype=np.int64)
+    im, label = to_tensor(rgb_img=im, label_img=empty_label)
+    im = im.unsqueeze(0)
+
+    # Prepare model
+    torch_model = WrappedBiSeNetv2(n_cats=args.num_classes, weight_path=args.weight_path)
+    traced_model = torch.jit.trace(torch_model, im)
+
+    ml_model = ct.convert(
+        traced_model,
+        inputs=[ct.ImageType(name="input", shape=im.shape, scale=scale, bias=bias)],
+        outputs=[ct.ImageType(name="output", color_layout=ct.colorlayout.GRAYSCALE)],
+        # compute_precision=ct.precision.FLOAT16
+        # minimum_deployment_target=ct.target.iOS13,
+        # compute_units=ct.ComputeUnit.CPU_AND_GPU
+    )
+    ml_model.save(args.out_pth)
+    print(f"Saved the model to {args.out_pth}")
