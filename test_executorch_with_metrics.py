@@ -10,6 +10,7 @@ import json
 import math
 from argparse import ArgumentParser
 import time
+import numpy as np
 from PIL import Image
 from torchvision.transforms import functional as F
 from tqdm import tqdm
@@ -18,6 +19,7 @@ from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from utilities.utils import model_parameters, compute_flops
 
 import coremltools as ct
+from executorch.runtime import Runtime, Method
 
 from eval.utils import AverageMeter
 from eval.semantic_segmentation.metrics.iou import IOU
@@ -47,7 +49,7 @@ def preprocess_inputs(self, output, target, is_output_probabilities=True):
         return pred, target
 
 
-def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
+def evaluate(args, model: Method, dataset_loader: torch.utils.data.DataLoader, device):
     im_size = tuple(args.im_size)
 
     losses = AverageMeter()
@@ -93,18 +95,17 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
     for index, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
-        input_img = F.to_pil_image(inputs[0].cpu())
+        inputs: torch.Tensor = inputs.to(device=device)
         target: torch.Tensor = target.to(device=device).type(torch.ByteTensor)
 
-        img_out = model.predict({"input": input_img})['output'] # ImageFile
-        img_out = F.to_tensor(img_out).to(device=device) * 255.0
-        img_out = img_out.type(torch.ByteTensor)
+        img_out = model.execute([inputs])
+        img_out = img_out[0].type(torch.ByteTensor)
 
         # Get the metrics
         for i in range(img_out.shape[0]):
             input_i = inputs[i].unsqueeze(0)
             target_i = target[i].unsqueeze(0)
-            img_out_i = img_out[i].unsqueeze(0)
+            img_out_i = img_out[i]#.unsqueeze(0)
 
             start_time = time.time()
             inter, union = miou_class.get_iou(img_out_i, target_i)
@@ -233,14 +234,16 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(10))
+    # dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
 
     # Load the model
     if args.weights_test:
-        model = ct.models.MLModel(args.weights_test)
+        runtime = Runtime.get()
+        program = runtime.load_program(args.weights_test)
+        model: Method = program.load_method("forward")
         args.classes = seg_classes
     else:
         print_error_message('weight file does not exist or not specified. Please check: {}', format(args.weights_test))
@@ -270,18 +273,18 @@ if __name__ == '__main__':
     # parser.add_argument('--batch-size', type=int, default=4, help='list of batch sizes')
     parser.add_argument('--num-classes', default=1000, type=int,
                         help='ImageNet classes. Required for loading the base network')
-    parser.add_argument('--savedir', type=str, default='./results_test_coreml', help='Location to save the results')
+    parser.add_argument('--savedir', type=str, default='./results_test_executorch', help='Location to save the results')
 
     args = parser.parse_args()
     args.batch_size = 1
     
     # set-up results path
     if args.dataset == 'city':
-        args.savedir = 'results_test_coreml/{}_{}_{}'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test_executorch/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-        args.savedir = 'results_test_coreml/{}_{}/{}'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test_executorch/{}_{}/{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
-        args.savedir = 'results_test_coreml/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test_executorch/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
 

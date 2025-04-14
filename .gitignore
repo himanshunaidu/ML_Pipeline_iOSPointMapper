@@ -20,12 +20,16 @@ command
 /coreml/semantic_segmentation/model_zoo/*.mlpackage.zip
 /coreml/semantic_segmentation/model_zoo/dump/
 
+## Edge Device
+/edge_device/semantic_segmentation/model_zoo/*
+
 ## Results
 /results/*
 !/results/.gitkeep
 /results_segmentation/*
 /results_test/*
 /results_test_coreml/*
+/results_test_executorch/*
 
 # Note: The following content has been pulled from https://github.com/jupyter/notebook
 *.bundle.*
