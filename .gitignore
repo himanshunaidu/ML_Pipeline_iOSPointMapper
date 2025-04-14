@@ -20,8 +20,8 @@ command
 /coreml/semantic_segmentation/model_zoo/*.mlpackage.zip
 /coreml/semantic_segmentation/model_zoo/dump/
 
-## Executorch
-/executor/semantic_segmentation/model_zoo/*
+## Edge Device
+/edge_device/semantic_segmentation/model_zoo/*
 
 ## Results
 /results/*

@@ -19,7 +19,9 @@ from transforms.semantic_segmentation.data_transforms import ToTensor
 
 # import coremltools as ct
 from torch.export import export
-from executorch.exir import to_edge
+from executorch.exir import to_edge, to_edge_transform_and_lower
+from executorch.backends.apple.coreml.partition.coreml_partitioner import CoreMLPartitioner
+from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner
 
 class WrappedBiSeNetv2(nn.Module):
     def __init__(self, n_cats, weight_path):
@@ -52,7 +54,7 @@ if __name__=="__main__":
     parser.add_argument('--model-height', default=224, type=int, help='Model height')
     parser.add_argument('--fp16', action='store_true')
     parser.add_argument('--outpath', dest='out_pth', type=str,
-            default='./executorch/semantic_segmentation/model_zoo/model.pte')
+            default='./edge_device/semantic_segmentation/model_zoo/model.pte')
     parser.add_argument('--img-path', dest='img_path', type=str, default='./datasets/custom_images/test.jpg',)
     args = parser.parse_args()
 
@@ -77,9 +79,10 @@ if __name__=="__main__":
     torch_model = WrappedBiSeNetv2(args.num_classes, args.weight_path)
     torch_model.eval()
 
-    aten_model = export(torch_model, (im,))
-    edge_program = to_edge(aten_model)
-    executorch_program = edge_program.to_executorch()
+    executorch_program = to_edge_transform_and_lower(
+        export(torch_model, (im,)),
+        partitioner=[CoreMLPartitioner()]
+    ).to_executorch()
 
     with(open(args.out_pth, 'wb')) as f:
         f.write(executorch_program.buffer)
