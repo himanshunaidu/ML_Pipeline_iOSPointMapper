@@ -17,6 +17,8 @@ from utilities.print_utils import *
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from utilities.utils import model_parameters, compute_flops
 
+import coremltools as ct
+
 from eval.utils import AverageMeter
 from eval.semantic_segmentation.metrics.iou import IOU
 from eval.semantic_segmentation.metrics.dice import Dice
@@ -25,15 +27,18 @@ from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
 from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, idToClassMap
 from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
 
-def preprocess_inputs(self, output, target):
+def preprocess_inputs(self, output, target, is_output_probabilities=True):
         if isinstance(output, tuple):
             output = output[0]
 
-        _, pred = torch.max(output, 1)
+        if is_output_probabilities:
+            _, pred = torch.max(output, 1)
+        else:
+            pred = output
 
-        if pred.device == torch.device('cuda'):
+        if pred.device == torch.device('mps'):
             pred = pred.cpu()
-        if target.device == torch.device('cuda'):
+        if target.device == torch.device('mps'):
             target = target.cpu()
         
         pred = pred.type(torch.ByteTensor)
@@ -67,9 +72,9 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     romrum_old_over_meter = AverageMeter()
     romrum_old_under_meter = AverageMeter()
 
-    miou_class = IOU(num_classes=args.classes)
-    persello_class = Persello(num_classes=args.classes, max_regions=1024)
-    romrum_class = ROMRUM(num_classes=args.classes, max_regions=1024)
+    miou_class = IOU(num_classes=args.classes, is_output_probabilities=False)
+    persello_class = Persello(num_classes=args.classes, max_regions=1024, is_output_probabilities=False)
+    romrum_class = ROMRUM(num_classes=args.classes, max_regions=1024, is_output_probabilities=False)
 
     # To record time taken for each metric
     start_time = 0
@@ -86,13 +91,14 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     else:
         cmap = None
 
-    model.eval()
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
     for i, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
-        inputs: torch.Tensor = inputs.to(device=device)
+        input_img = F.to_pil_image(inputs[0].cpu())
         target: torch.Tensor = target.to(device=device)
 
-        img_out: torch.Tensor = model(inputs)
+        img_out = model.predict({"input": input_img})['output'] # ImageFile
+        img_out = F.to_tensor(img_out).to(device=device) * 255.0
+        img_out = img_out.type(torch.ByteTensor)
 
         # Get the metrics
         for i in range(img_out.shape[0]):
@@ -123,7 +129,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             romrum_times.append(time.time() - start_time)
 
             # Get old persello metrics
-            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
+            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i, False)
             img_out_processed, target_processed = img_out_processed.numpy()[0], target_processed.numpy()[0]
 
             start_time = time.time()
@@ -221,46 +227,22 @@ def main(args):
 
 
     # Get a subset of the dataset
-    # dataset = torch.utils.data.Subset(dataset, range(10))
+    dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
 
-    if args.model == 'espnetv2':
-        from model.semantic_segmentation.espnetv2.espnetv2 import espnetv2_seg
-        args.classes = seg_classes
-        model = espnetv2_seg(args)
-    elif args.model == 'bisenetv2':
-        from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
-        seg_classes = seg_classes - 1 if args.dataset == 'city' else seg_classes # Because the background class is not used in the model
-        args.classes = seg_classes
-        model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
-    else:
-        print_error_message('{} network not yet supported'.format(args.model))
-        exit(-1)
-
-    # mdoel information
-    num_params = model_parameters(model)
-    flops = compute_flops(model, input=torch.Tensor(1, 3, args.im_size[0], args.im_size[1]))
-    print_info_message('FLOPs for an input of size {}x{}: {:.2f} million'.format(args.im_size[0], args.im_size[1], flops))
-    print_info_message('# of parameters: {}'.format(num_params))
-
+    # Load the model
     if args.weights_test:
-        print_info_message('Loading model weights')
-        weight_dict = torch.load(args.weights_test, map_location=torch.device('cpu'))
-        model.load_state_dict(weight_dict, strict=False if args.model == 'bisenetv2' else True)
-        print_info_message('Weight loaded successfully')
+        model = ct.models.MLModel(args.weights_test)
+        args.classes = seg_classes
     else:
         print_error_message('weight file does not exist or not specified. Please check: {}', format(args.weights_test))
-
-    num_gpus = torch.cuda.device_count()
-    device = 'cuda' if num_gpus > 0 else 'cpu'
-    model = model.to(device=device)
 
     if not os.path.isdir(args.savedir):
         os.makedirs(args.savedir)
 
-    evaluate(args, model, dataset_loader, device=device)
+    evaluate(args, model, dataset_loader, device='cpu')
 
 
 if __name__ == '__main__':
@@ -272,55 +254,28 @@ if __name__ == '__main__':
     # mdoel details
     parser.add_argument('--model', default="bisenetv2", choices=segmentation_models, help='Model name')
     parser.add_argument('--weights-test', default='', help='Pretrained weights directory.')
-    parser.add_argument('--s', default=2.0, type=float, help='scale')
+    parser.add_argument('--s', default=2.0, type=float, help='scale') # Do not use this for now
     # dataset details
     parser.add_argument('--data-path', default="", help='Data directory')
     parser.add_argument('--dataset', default='city', choices=segmentation_datasets, help='Dataset name')
     # input details
-    parser.add_argument('--im-size', type=int, nargs="+", default=[512, 256], help='Image size for testing (W x H)')
+    parser.add_argument('--im-size', type=int, nargs="+", default=[1024, 512], help='Image size for testing (W x H)')
     parser.add_argument('--split', default='val', choices=['train', 'val', 'test'], help='data split')
-    parser.add_argument('--batch-size', type=int, default=4, help='list of batch sizes')
-    parser.add_argument('--model-width', default=224, type=int, help='Model width')
-    parser.add_argument('--model-height', default=224, type=int, help='Model height')
-    parser.add_argument('--channels', default=3, type=int, help='Input channels')
+    # parser.add_argument('--batch-size', type=int, default=4, help='list of batch sizes')
     parser.add_argument('--num-classes', default=1000, type=int,
                         help='ImageNet classes. Required for loading the base network')
-    parser.add_argument('--savedir', type=str, default='./results_segmentation_test', help='Location to save the results')
+    parser.add_argument('--savedir', type=str, default='./results_test_coreml', help='Location to save the results')
 
     args = parser.parse_args()
-
-    if not args.weights_test:
-        if args.model == 'espnetv2':
-            from model.semantic_segmentation.espnetv2.weight_locations import model_weight_map
-
-            model_key = '{}_{}'.format(args.model, args.s)
-            dataset_key = '{}_{}x{}'.format(args.dataset, args.im_size[0], args.im_size[1])
-            assert model_key in model_weight_map.keys(), '{} does not exist'.format(model_key)
-            assert dataset_key in model_weight_map[model_key].keys(), '{} does not exist'.format(dataset_key)
-            args.weights_test = model_weight_map[model_key][dataset_key]['weights']
-            if not os.path.isfile(args.weights_test):
-                print_error_message('weight file does not exist: {}'.format(args.weights_test))
-
-        elif args.model == 'bisenetv2':
-            from model.semantic_segmentation.bisenetv2.weight_locations import model_weight_map
-
-            model_key = '{}'.format(args.model)
-            assert model_key in model_weight_map.keys(), '{} does not exist'.format(model_key)
-            args.weights_test = model_weight_map[model_key]['weights']
-            if not os.path.isfile(args.weights_test):
-                print_error_message('weight file does not exist: {}'.format(args.weights_test))
-
-        else:
-            print_error_message('{} network not yet supported'.format(args.model))
-            exit(-1)
+    args.batch_size = 1
     
     # set-up results path
     if args.dataset == 'city':
-        args.savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test_coreml/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-        args.savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test_coreml/{}_{}/{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
-        args.savedir = 'results_test/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test_coreml/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
 

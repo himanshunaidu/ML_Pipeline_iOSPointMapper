@@ -8,16 +8,20 @@ class Persello(object):
     """
     Helps to calculate the Persello metric for semantic segmentation.
     """
-    def __init__(self, num_classes=21, epsilon=1e-6, max_regions=255):
+    def __init__(self, num_classes=21, epsilon=1e-6, max_regions=255, is_output_probabilities=True):
         self.num_classes = num_classes
         self.epsilon = epsilon
         self.max_regions = max_regions
+        self.is_output_probabilities = is_output_probabilities
 
     def preprocess_inputs(self, output, target):
         if isinstance(output, tuple):
             output = output[0]
 
-        _, pred = torch.max(output, 1)
+        if self.is_output_probabilities:
+            _, pred = torch.max(output, 1)
+        else:
+            pred = output
 
         if pred.device == torch.device('cuda'):
             pred = pred.cpu()

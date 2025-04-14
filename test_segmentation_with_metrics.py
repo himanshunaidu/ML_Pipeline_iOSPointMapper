@@ -218,8 +218,8 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 def main(args):
     # read all the images in the folder
     if args.dataset == 'city':
-        from data_loader.semantic_segmentation.cityscapes import CityscapesSegmentation, CITYSCAPE_CLASS_LIST
-        dataset = CityscapesSegmentation(root=args.data_path, train=(args.split == "train"), size=args.im_size, scale=args.s,
+        from data_loader.semantic_segmentation.cityscapes import CityscapesSegmentationTest, CITYSCAPE_CLASS_LIST
+        dataset = CityscapesSegmentationTest(root=args.data_path, size=args.im_size, scale=args.s,
                                              coarse=False, split=args.split)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
     # elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset

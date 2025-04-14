@@ -11,11 +11,21 @@ command
 /model/semantic_segmentation/model_zoo/*/*.pth
 /model/semantic_segmentation/espnetv2/classification_submodule/model_zoo/*.pth
 
+## CoreML
+/coreml/semantic_segmentation/model_zoo/*.mlmodel
+/coreml/semantic_segmentation/model_zoo/*.mlmodelc
+/coreml/semantic_segmentation/model_zoo/*.mlmodelc.zip
+/coreml/semantic_segmentation/model_zoo/*.mlmodel.zip
+/coreml/semantic_segmentation/model_zoo/*.mlpackage
+/coreml/semantic_segmentation/model_zoo/*.mlpackage.zip
+/coreml/semantic_segmentation/model_zoo/dump/
+
 ## Results
 /results/*
 !/results/.gitkeep
 /results_segmentation/*
 /results_test/*
+/results_test_coreml/*
 
 # Note: The following content has been pulled from https://github.com/jupyter/notebook
 *.bundle.*

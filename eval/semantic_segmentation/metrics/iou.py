@@ -20,9 +20,10 @@ class IOU(object):
     epsilon : float
         A small value added to the union to avoid division by zero.
     """
-    def __init__(self, num_classes=21, epsilon=1e-6):
+    def __init__(self, num_classes=21, epsilon=1e-6, is_output_probabilities=True):
         self.num_classes = num_classes
         self.epsilon = epsilon
+        self.is_output_probabilities = is_output_probabilities
 
     def get_iou(self, output, target):
         """
@@ -49,7 +50,10 @@ class IOU(object):
         if isinstance(output, tuple):
             output = output[0]
 
-        _, pred = torch.max(output, 1)
+        if self.is_output_probabilities:
+            _, pred = torch.max(output, 1)
+        else:
+            pred = output
 
         # histc in torch is implemented only for cpu tensors, so move your tensors to CPU
         if pred.device == torch.device('cuda'):
