@@ -1,7 +1,5 @@
 """
-This script converts a BiSeNetv2 PyTorch model to CoreML format for semantic segmentation.
-Currently, it uses the old TorchScript method for conversion.
-It is recommended to shift to the torch.export method for better performance.
+This script converts a BiSeNetv2 PyTorch model to CoreML format for semantic segmentation using ExecuTorch. 
 """
 import argparse
 import os.path as osp
@@ -19,7 +17,9 @@ from PIL import Image
 from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
 from transforms.semantic_segmentation.data_transforms import ToTensor
 
-import coremltools as ct
+# import coremltools as ct
+from torch.export import export
+from executorch.exir import to_edge
 
 class WrappedBiSeNetv2(nn.Module):
     def __init__(self, n_cats, weight_path):
@@ -31,13 +31,10 @@ class WrappedBiSeNetv2(nn.Module):
 
     def forward(self, x):
         res = self.model(x)
-        # print('res shape:', res.shape)
         out = torch.argmax(res, dim=1, keepdim=True).float()
-        # print('out shape:', out.shape)
-        # out = out.float() / 255
         return out
-
-if __name__ == '__main__':
+    
+if __name__=="__main__":
     from config.general_details import segmentation_models, segmentation_schedulers, segmentation_loss_fns, \
         segmentation_datasets
     torch.set_grad_enabled(False)
@@ -55,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-height', default=224, type=int, help='Model height')
     parser.add_argument('--fp16', action='store_true')
     parser.add_argument('--outpath', dest='out_pth', type=str,
-            default='./coreml/semantic_segmentation/model_zoo/model.mlpackage')
+            default='./executorch/semantic_segmentation/model_zoo/model.pte')
     parser.add_argument('--img-path', dest='img_path', type=str, default='./datasets/custom_images/test.jpg',)
     args = parser.parse_args()
 
@@ -76,20 +73,13 @@ if __name__ == '__main__':
     im, label = to_tensor(rgb_img=im, label_img=empty_label)
     im = im.unsqueeze(0)
 
-    # Prepare model
-    torch_model = WrappedBiSeNetv2(n_cats=args.num_classes, weight_path=args.weight_path)
+    # Load the model
+    torch_model = WrappedBiSeNetv2(args.num_classes, args.weight_path)
     torch_model.eval()
-    # torch_model(im)
-    # exit()
-    traced_model = torch.jit.trace(torch_model, im)
 
-    ml_model = ct.convert(
-        traced_model,
-        inputs=[ct.ImageType(name="input", shape=im.shape, scale=scale, bias=bias)],
-        outputs=[ct.ImageType(name="output", color_layout=ct.colorlayout.GRAYSCALE)],
-        # compute_precision=ct.precision.FLOAT16
-        # minimum_deployment_target=ct.target.iOS13,
-        # compute_units=ct.ComputeUnit.CPU_AND_GPU
-    )
-    ml_model.save(args.out_pth)
-    print(f"Saved the model to {args.out_pth}")
+    aten_model = export(torch_model, (im,))
+    edge_program = to_edge(aten_model)
+    executorch_program = edge_program.to_executorch()
+
+    with(open(args.out_pth, 'wb')) as f:
+        f.write(executorch_program.buffer)
