@@ -219,8 +219,8 @@ def main(args):
     # read all the images in the folder
     if args.dataset == 'city':
         from data_loader.semantic_segmentation.cityscapes import CityscapesSegmentation, CITYSCAPE_CLASS_LIST
-        dataset = CityscapesSegmentation(root=args.data_path, train=(args.split == "train"), size=args.im_size, scale=args.s,
-                                             coarse=False, split=args.split)
+        dataset = CityscapesSegmentation(root=args.data_path, train=False, size=args.im_size, scale=args.s,
+                                             coarse=False)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
     # elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
     #     image_path = os.path.join(args.data_path, "rgb", "*.png")
