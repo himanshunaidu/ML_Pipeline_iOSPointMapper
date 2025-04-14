@@ -13,6 +13,11 @@ command
 
 ## CoreML
 /coreml/semantic_segmentation/model_zoo/*.mlmodel
+/coreml/semantic_segmentation/model_zoo/*.mlmodelc
+/coreml/semantic_segmentation/model_zoo/*.mlmodelc.zip
+/coreml/semantic_segmentation/model_zoo/*.mlmodel.zip
+/coreml/semantic_segmentation/model_zoo/*.mlpackage
+/coreml/semantic_segmentation/model_zoo/*.mlpackage.zip
 /coreml/semantic_segmentation/model_zoo/dump/
 
 ## Results

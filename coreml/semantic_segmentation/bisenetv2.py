@@ -26,12 +26,14 @@ class WrappedBiSeNetv2(nn.Module):
         super(WrappedBiSeNetv2, self).__init__()
         self.model = BiSeNetV2(n_classes=n_cats, aux_mode='eval')
         self.n_cats = n_cats
-        self.model.load_state_dict(torch.load(weight_path), strict=False)
+        self.model.load_state_dict(torch.load(weight_path, map_location=torch.device('mps')), strict=False)
         self.model.eval()
 
     def forward(self, x):
-        res = self.model(x)[0]
+        res = self.model(x)
+        # print('res shape:', res.shape)
         out = torch.argmax(res, dim=1, keepdim=True).float()
+        # print('out shape:', out.shape)
         # out = out.float() / 255
         return out
 
@@ -53,7 +55,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-height', default=224, type=int, help='Model height')
     parser.add_argument('--fp16', action='store_true')
     parser.add_argument('--outpath', dest='out_pth', type=str,
-            default='model.mlpackage')
+            default='./coreml/semantic_segmentation/model_zoo/model.mlpackage')
     parser.add_argument('--img-path', dest='img_path', type=str, default='./datasets/custom_images/test.jpg',)
     args = parser.parse_args()
 
@@ -76,6 +78,9 @@ if __name__ == '__main__':
 
     # Prepare model
     torch_model = WrappedBiSeNetv2(n_cats=args.num_classes, weight_path=args.weight_path)
+    torch_model.eval()
+    # torch_model(im)
+    # exit()
     traced_model = torch.jit.trace(torch_model, im)
 
     ml_model = ct.convert(
