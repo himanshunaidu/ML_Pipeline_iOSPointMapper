@@ -24,14 +24,20 @@ from executorch.backends.apple.coreml.partition.coreml_partitioner import CoreML
 from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner
 
 class WrappedBiSeNetv2(nn.Module):
-    def __init__(self, n_cats, weight_path):
+    def __init__(self, weight_path, n_cats, scale=1.0, bias=[0.0, 0.0, 0.0]):
         super(WrappedBiSeNetv2, self).__init__()
         self.model = BiSeNetV2(n_classes=n_cats, aux_mode='eval')
         self.n_cats = n_cats
         self.model.load_state_dict(torch.load(weight_path, map_location=torch.device('mps')), strict=False)
+        self.model = self.model.to(torch.device('mps'))
         self.model.eval()
+        self.scale = torch.tensor(scale, dtype=torch.float32).to(torch.device('mps'))
+        self.bias = torch.tensor(bias, dtype=torch.float32).reshape(1, 3, 1, 1).to(torch.device('mps'))
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Normalize the input
+        x = x.to(torch.device('mps'))
+        x = x * self.scale + self.bias
         res = self.model(x)
         out = torch.argmax(res, dim=1, keepdim=True).float()
         return out
@@ -65,7 +71,12 @@ if __name__=="__main__":
         mean=(0.0, 0.0, 0.0), # placeholder
         std=(1.0, 1.0, 1.0),
     )
-    scale = 1/(0.2125*255.0)
+    # NOTE: Weirdly enough, CoreML and Executorch have some difference in how they handle the scale and bias
+    # Executorch, predictably enough, requires 1/255 scaling only if the input is scaled to 255
+    # CoreML, if we use ImageType for input, seems to require the scaling even if the input is not scaled to 1
+    # CoreML, if the input is scaled to 255, even then it requires the scaling
+    # It is possible that internally, CoreML is scaling the input to 255 if the input is scaled to 1
+    scale = 1/(0.2125)#*255.0)
     bias = [- 0.3257/(0.2112) , - 0.3690/(0.2148), - 0.3223/(0.2115)]
     print('Loading image:', args.img_path)
     im = cv2.imread(args.img_path)#[:, :, ::-1]
@@ -74,10 +85,19 @@ if __name__=="__main__":
     empty_label = np.zeros(im.shape[:2], dtype=np.int64)
     im, label = to_tensor(rgb_img=im, label_img=empty_label)
     im = im.unsqueeze(0)
+    print('Image shape:', im.shape)
+
+    # print('x sample pixel', im[0, :, 0, 0])
+    # print('scale', scale)
+    # print('bias sample pixel', torch.tensor(bias, dtype=torch.float32).reshape(1, 3, 1, 1)[0, :, 0, 0])
+    # im_normalized = im * scale + torch.tensor(bias, dtype=torch.float32).reshape(1, 3, 1, 1)
+    # print('Normalized x sample pixel', im_normalized[0, :, 0, 0])
 
     # Load the model
-    torch_model = WrappedBiSeNetv2(args.num_classes, args.weight_path)
+    torch_model = WrappedBiSeNetv2(weight_path=args.weight_path, n_cats=args.num_classes, scale=scale, bias=bias)
     torch_model.eval()
+
+    torch_model = torch_model.to(torch.device('mps'))
 
     executorch_program = to_edge_transform_and_lower(
         export(torch_model, (im,)),
