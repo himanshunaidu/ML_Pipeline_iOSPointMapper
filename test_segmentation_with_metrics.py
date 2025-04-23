@@ -16,6 +16,7 @@ from tqdm import tqdm
 from utilities.print_utils import *
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from utilities.utils import model_parameters, compute_flops
+from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_TRAIN_CMAP
 
 from eval.utils import AverageMeter
 from eval.semantic_segmentation.metrics.iou import IOU
@@ -34,9 +35,9 @@ def preprocess_inputs(self, output, target, is_output_probabilities=True):
         else:
             pred = output
 
-        if pred.device == torch.device('cuda'):
+        if pred.device == torch.device('mps'):
             pred = pred.cpu()
-        if target.device == torch.device('cuda'):
+        if target.device == torch.device('mps'):
             target = target.cpu()
         
         pred = pred.type(torch.ByteTensor)
@@ -44,6 +45,23 @@ def preprocess_inputs(self, output, target, is_output_probabilities=True):
 
         return pred, target
 
+def grayscale_tensor_to_rgb_tensor(tensor, cmap):
+    """
+    Convert a grayscale tensor to an RGB tensor using a colormap.
+    :param tensor: Grayscale tensor of shape (C, H, W)
+    :param cmap: Colormap to use for conversion (dict mapping grayscale values to RGB tuples)
+    :return: RGB tensor of shape (3, H, W)
+    """
+    # Create an empty RGB tensor
+    rgb_tensor = torch.zeros((3, tensor.shape[1], tensor.shape[2]), dtype=torch.uint8)
+    # Iterate over the grayscale values and assign the corresponding RGB values
+    for i in range(256):
+        if i in cmap:
+            rgb_tensor[0][tensor[0] == i] = cmap[i][0]
+            rgb_tensor[1][tensor[0] == i] = cmap[i][1]
+            rgb_tensor[2][tensor[0] == i] = cmap[i][2]
+
+    return rgb_tensor
 
 def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     im_size = tuple(args.im_size)
@@ -86,6 +104,8 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
         cmap = VOCColormap().get_color_map_voc()
+    elif args.dataset == 'city':
+        cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
 
@@ -93,9 +113,9 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
     for index, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
         inputs: torch.Tensor = inputs.to(device=device)
-        target: torch.Tensor = target.to(device=device)
+        target: torch.Tensor = target.to(device=device).type(torch.ByteTensor)
 
-        img_out: torch.Tensor = model(inputs)
+        img_out: torch.Tensor = model(inputs).type(torch.ByteTensor)
 
         # Get the metrics
         for i in range(img_out.shape[0]):
@@ -152,6 +172,19 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             romrum_old_over_meter.update(math.tanh(romrum_old_over))#/len(idToClassMap.keys()))
             romrum_old_under_meter.update(math.tanh(romrum_old_under))#/len(idToClassMap.keys()))
             romrum_old_times.append(time.time() - start_time)
+
+            # Save the images
+            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
+            target_i_image = F.to_pil_image(target_i.cpu()*10)
+            target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
+            target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
+            target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
+            target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
+            img_out_image = F.to_pil_image(img_out_processed.cpu()*10)
+            img_out_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index*args.batch_size + i)))
+            img_out_rgb_image = grayscale_tensor_to_rgb_tensor(img_out_processed, cmap)
+            img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
+            img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
 
     iou = inter_meter.sum / (union_meter.sum + 1e-10)
     dice = 2 * inter_meter.sum / (inter_meter.sum + union_meter.sum + 1e-10)
@@ -256,12 +289,14 @@ def main(args):
     else:
         print_error_message('weight file does not exist or not specified. Please check: {}', format(args.weights_test))
 
-    num_gpus = torch.cuda.device_count()
-    device = 'cuda' if num_gpus > 0 else 'cpu'
+    num_gpus = torch.mps.device_count()
+    device = 'mps' if num_gpus > 0 else 'cpu'
     model = model.to(device=device)
 
     if not os.path.isdir(args.savedir):
         os.makedirs(args.savedir)
+        os.makedirs(os.path.join(args.savedir, 'target'))
+        os.makedirs(os.path.join(args.savedir, 'pred'))
 
     evaluate(args, model, dataset_loader, device=device)
 

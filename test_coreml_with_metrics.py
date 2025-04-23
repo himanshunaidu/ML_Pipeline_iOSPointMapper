@@ -180,15 +180,15 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 
             # Save the images
             target_i_image = F.to_pil_image(target_i.cpu()*10)
-            target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index)))
+            target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
             target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
             target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
-            target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index)))
+            target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
             img_out_image = F.to_pil_image(img_out_i.cpu()*10)
-            img_out_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index)))
+            img_out_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index*args.batch_size + i)))
             img_out_rgb_image = grayscale_tensor_to_rgb_tensor(img_out_i, cmap)
             img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
-            img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index)))
+            img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
 
     iou = inter_meter.sum / (union_meter.sum + 1e-10)
     dice = 2 * inter_meter.sum / (inter_meter.sum + union_meter.sum + 1e-10)
@@ -261,7 +261,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(2))
+    # dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
