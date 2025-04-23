@@ -35,15 +35,19 @@ def preprocess_inputs(self, output, target, is_output_probabilities=True):
         else:
             pred = output
 
-        if pred.device == torch.device('mps'):
+        if pred.device == torch.device('cuda'):
             pred = pred.cpu()
-        if target.device == torch.device('mps'):
+        if target.device == torch.device('cuda'):
             target = target.cpu()
         
         pred = pred.type(torch.ByteTensor)
         target = target.type(torch.ByteTensor)
 
         return pred, target
+
+def data_transform(input, mean, std):
+    input = F.normalize(input, mean, std)  # normalize the tensor
+    return input
 
 def grayscale_tensor_to_rgb_tensor(tensor, cmap):
     """
@@ -257,7 +261,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    # dataset = torch.utils.data.Subset(dataset, range(10))
+    dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
@@ -266,11 +270,19 @@ def main(args):
         from model.semantic_segmentation.espnetv2.espnetv2 import espnetv2_seg
         args.classes = seg_classes
         model = espnetv2_seg(args)
+        args.mean = MEAN
+        args.std = STD
     elif args.model == 'bisenetv2':
         from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
         seg_classes = seg_classes - 1 if args.dataset == 'city' else seg_classes # Because the background class is not used in the model
         args.classes = seg_classes
         model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
+        if args.dataset == 'city' or args.dataset == 'edge_mapping':
+            args.mean = (0.3257, 0.3690, 0.3223)
+            args.std = (0.2112, 0.2148, 0.2115)
+        else:
+            args.mean = MEAN
+            args.std = STD
     else:
         print_error_message('{} network not yet supported'.format(args.model))
         exit(-1)
@@ -289,8 +301,8 @@ def main(args):
     else:
         print_error_message('weight file does not exist or not specified. Please check: {}', format(args.weights_test))
 
-    num_gpus = torch.mps.device_count()
-    device = 'mps' if num_gpus > 0 else 'cpu'
+    num_gpus = torch.cuda.device_count()
+    device = 'cuda' if num_gpus > 0 else 'cpu'
     model = model.to(device=device)
 
     if not os.path.isdir(args.savedir):
