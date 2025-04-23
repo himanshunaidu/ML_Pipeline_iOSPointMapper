@@ -4,11 +4,15 @@ import os
 from PIL import Image
 from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose
 from transforms.semantic_segmentation.data_transforms import VerticalHalfCrop, Identity
+from data_loader.semantic_segmentation.cityscapes_scripts.process_cityscapes import Label, labels
 
 CITYSCAPE_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
                         'bicycle', 'background']
 
+CITYSCAPE_TRAIN_CMAP = {
+    label.trainId: label.color for index, label in enumerate(labels)
+}
 
 class CityscapesSegmentation(data.Dataset):
 
