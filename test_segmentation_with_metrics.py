@@ -25,11 +25,14 @@ from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
 from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, idToClassMap
 from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
 
-def preprocess_inputs(self, output, target):
+def preprocess_inputs(self, output, target, is_output_probabilities=True):
         if isinstance(output, tuple):
             output = output[0]
 
-        _, pred = torch.max(output, 1)
+        if is_output_probabilities:
+            _, pred = torch.max(output, 1)
+        else:
+            pred = output
 
         if pred.device == torch.device('cuda'):
             pred = pred.cpu()
@@ -88,7 +91,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 
     model.eval()
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
-    for i, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
+    for index, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
         inputs: torch.Tensor = inputs.to(device=device)
         target: torch.Tensor = target.to(device=device)
 
