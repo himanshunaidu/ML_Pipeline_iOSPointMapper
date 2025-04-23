@@ -58,7 +58,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-height', default=224, type=int, help='Model height')
     parser.add_argument('--fp16', action='store_true')
     parser.add_argument('--outpath', dest='out_pth', type=str,
-            default='./coreml/semantic_segmentation/model_zoo')
+            default='./coreml/semantic_segmentation/model_zoo/')
     parser.add_argument('--img-path', dest='img_path', type=str, default='./datasets/custom_images/test.jpg',)
     args = parser.parse_args()
 
@@ -95,6 +95,6 @@ if __name__ == '__main__':
         # compute_units=ct.ComputeUnit.CPU_AND_GPU
     )
 
-    ml_model_path = os.path.join(args.out_pth, 'bisenetv2_{}_{}_{}.mlmodel'.format(args.num_classes, args.im_size[0], args.im_size[1]))
-    ml_model.save(args.out_pth)
-    print(f"Saved the model to {args.out_pth}")
+    ml_model_path = os.path.join(args.out_pth, 'bisenetv2_{}_{}_{}.mlpackage'.format(args.num_classes, args.im_size[0], args.im_size[1]))
+    ml_model.save(ml_model_path)
+    print(f"Saved the model to {ml_model_path}")
