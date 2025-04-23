@@ -28,8 +28,8 @@ class Persello(object):
         if target.device == torch.device('cuda'):
             target = target.cpu()
         
-        pred = pred.type(torch.ByteTensor)
-        target = target.type(torch.ByteTensor)
+        pred = pred.type(torch.ByteTensor).clone()
+        target = target.type(torch.ByteTensor).clone()
         
         # shift by 1 so that 255 is 0
         # TODO: Check if this is necessary in the current implementation
