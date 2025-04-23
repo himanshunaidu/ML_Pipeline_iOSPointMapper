@@ -25,7 +25,7 @@ class IOU(object):
         self.epsilon = epsilon
         self.is_output_probabilities = is_output_probabilities
 
-    def get_iou(self, output, target):
+    def get_iou(self, output: torch.Tensor, target: torch.Tensor):
         """
         Calculate the intersection over union coefficient of a segmentation.
 
@@ -61,8 +61,8 @@ class IOU(object):
         if target.device == torch.device('cuda'):
             target = target.cpu()
 
-        pred = pred.type(torch.ByteTensor)
-        target = target.type(torch.ByteTensor)
+        pred = pred.type(torch.ByteTensor).clone()
+        target = target.type(torch.ByteTensor).clone()
 
         # shift by 1 so that 255 is 0
         # TODO: Check if this is necessary in the current implementation

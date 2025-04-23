@@ -55,12 +55,14 @@ if __name__=="__main__":
     parser.add_argument('--channels', default=3, type=int, help='Input channels')
     parser.add_argument('--num-classes', default=19, type=int,
                         help='Cityscapes classes.')
+    parser.add_argument('--im-size', default=[1024, 512], type=int, nargs='+',
+                        help='Input image size. The model will be resized to this size.')
     parser.add_argument('--s', type=float, default=2.0, help='Factor by which channels will be scaled')
     parser.add_argument('--model-width', default=224, type=int, help='Model width')
     parser.add_argument('--model-height', default=224, type=int, help='Model height')
     parser.add_argument('--fp16', action='store_true')
     parser.add_argument('--outpath', dest='out_pth', type=str,
-            default='./edge_device/semantic_segmentation/model_zoo/model.pte')
+            default='./edge_device/semantic_segmentation/model_zoo/')
     parser.add_argument('--img-path', dest='img_path', type=str, default='./datasets/custom_images/test.jpg',)
     args = parser.parse_args()
 
@@ -81,7 +83,7 @@ if __name__=="__main__":
     print('Loading image:', args.img_path)
     im = cv2.imread(args.img_path)#[:, :, ::-1]
     # Resize
-    im = cv2.resize(im, (512, 256))
+    im = cv2.resize(im, args.im_size)
     empty_label = np.zeros(im.shape[:2], dtype=np.int64)
     im, label = to_tensor(rgb_img=im, label_img=empty_label)
     im = im.unsqueeze(0)
@@ -104,5 +106,6 @@ if __name__=="__main__":
         partitioner=[CoreMLPartitioner()]
     ).to_executorch()
 
-    with(open(args.out_pth, 'wb')) as f:
+    ml_model_path = osp.join(args.out_pth, 'bisenetv2_{}_{}_{}.pte'.format(args.num_classes, args.im_size[0], args.im_size[1]))
+    with(open(ml_model_path, 'wb')) as f:
         f.write(executorch_program.buffer)

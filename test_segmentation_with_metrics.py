@@ -1,3 +1,8 @@
+"""
+This experimental script is used to evaluate the performance of a semantic segmentation model on a dataset.
+Only BiSeNetv2 and ESPNetv2 in this script.
+"""
+
 import torch
 import glob
 import os
@@ -20,41 +25,14 @@ from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
 from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, idToClassMap
 from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
 
-
-def relabel(img):
-    '''
-    This function relabels the predicted labels so that cityscape dataset can process
-    :param img:
-    :return:
-    '''
-    img[img == 19] = 255
-    img[img == 18] = 33
-    img[img == 17] = 32
-    img[img == 16] = 31
-    img[img == 15] = 28
-    img[img == 14] = 27
-    img[img == 13] = 26
-    img[img == 12] = 25
-    img[img == 11] = 24
-    img[img == 10] = 23
-    img[img == 9] = 22
-    img[img == 8] = 21
-    img[img == 7] = 20
-    img[img == 6] = 19
-    img[img == 5] = 17
-    img[img == 4] = 13
-    img[img == 3] = 12
-    img[img == 2] = 11
-    img[img == 1] = 8
-    img[img == 0] = 7
-    img[img == 255] = 0
-    return img
-
-def preprocess_inputs(self, output, target):
+def preprocess_inputs(self, output, target, is_output_probabilities=True):
         if isinstance(output, tuple):
             output = output[0]
 
-        _, pred = torch.max(output, 1)
+        if is_output_probabilities:
+            _, pred = torch.max(output, 1)
+        else:
+            pred = output
 
         if pred.device == torch.device('cuda'):
             pred = pred.cpu()
@@ -222,24 +200,24 @@ def main(args):
         dataset = CityscapesSegmentationTest(root=args.data_path, size=args.im_size, scale=args.s,
                                              coarse=False, split=args.split)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
-    # elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-    #     image_path = os.path.join(args.data_path, "rgb", "*.png")
-    #     image_list = glob.glob(image_path)
-    #     from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
-    #     seg_classes = len(EDGE_MAPPING_CLASS_LIST)
-    # elif args.dataset == 'pascal':
-    #     from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
-    #     seg_classes = len(VOC_CLASS_LIST)
-    #     data_file = os.path.join(args.data_path, 'VOC2012', 'list', '{}.txt'.format(args.split))
-    #     if not os.path.isfile(data_file):
-    #         print_error_message('{} file does not exist'.format(data_file))
-    #     image_list = []
-    #     with open(data_file, 'r') as lines:
-    #         for line in lines:
-    #             rgb_img_loc = '{}/{}/{}'.format(args.data_path, 'VOC2012', line.split()[0])
-    #             if not os.path.isfile(rgb_img_loc):
-    #                 print_error_message('{} image file does not exist'.format(rgb_img_loc))
-    #             image_list.append(rgb_img_loc)
+    elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
+        image_path = os.path.join(args.data_path, "rgb", "*.png")
+        image_list = glob.glob(image_path)
+        from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+        seg_classes = len(EDGE_MAPPING_CLASS_LIST)
+    elif args.dataset == 'pascal':
+        from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
+        seg_classes = len(VOC_CLASS_LIST)
+        data_file = os.path.join(args.data_path, 'VOC2012', 'list', '{}.txt'.format(args.split))
+        if not os.path.isfile(data_file):
+            print_error_message('{} file does not exist'.format(data_file))
+        image_list = []
+        with open(data_file, 'r') as lines:
+            for line in lines:
+                rgb_img_loc = '{}/{}/{}'.format(args.data_path, 'VOC2012', line.split()[0])
+                if not os.path.isfile(rgb_img_loc):
+                    print_error_message('{} image file does not exist'.format(rgb_img_loc))
+                image_list.append(rgb_img_loc)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
         exit(-1)
@@ -255,6 +233,11 @@ def main(args):
         from model.semantic_segmentation.espnetv2.espnetv2 import espnetv2_seg
         args.classes = seg_classes
         model = espnetv2_seg(args)
+    elif args.model == 'bisenetv2':
+        from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
+        seg_classes = seg_classes - 1 if args.dataset == 'city' else seg_classes # Because the background class is not used in the model
+        args.classes = seg_classes
+        model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
     else:
         print_error_message('{} network not yet supported'.format(args.model))
         exit(-1)
@@ -268,7 +251,7 @@ def main(args):
     if args.weights_test:
         print_info_message('Loading model weights')
         weight_dict = torch.load(args.weights_test, map_location=torch.device('cpu'))
-        model.load_state_dict(weight_dict)
+        model.load_state_dict(weight_dict, strict=False if args.model == 'bisenetv2' else True)
         print_info_message('Weight loaded successfully')
     else:
         print_error_message('weight file does not exist or not specified. Please check: {}', format(args.weights_test))
@@ -290,7 +273,7 @@ if __name__ == '__main__':
     # general details
     parser.add_argument('--workers', type=int, default=4, help='number of data loading workers')
     # mdoel details
-    parser.add_argument('--model', default="espnetv2", choices=segmentation_models, help='Model name')
+    parser.add_argument('--model', default="bisenetv2", choices=segmentation_models, help='Model name')
     parser.add_argument('--weights-test', default='', help='Pretrained weights directory.')
     parser.add_argument('--s', default=2.0, type=float, help='scale')
     # dataset details
@@ -310,16 +293,30 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not args.weights_test:
-        from model.semantic_segmentation.espnetv2.weight_locations import model_weight_map
+        if args.model == 'espnetv2':
+            from model.semantic_segmentation.espnetv2.weight_locations import model_weight_map
 
-        model_key = '{}_{}'.format(args.model, args.s)
-        dataset_key = '{}_{}x{}'.format(args.dataset, args.im_size[0], args.im_size[1])
-        assert model_key in model_weight_map.keys(), '{} does not exist'.format(model_key)
-        assert dataset_key in model_weight_map[model_key].keys(), '{} does not exist'.format(dataset_key)
-        args.weights_test = model_weight_map[model_key][dataset_key]['weights']
-        if not os.path.isfile(args.weights_test):
-            print_error_message('weight file does not exist: {}'.format(args.weights_test))
+            model_key = '{}_{}'.format(args.model, args.s)
+            dataset_key = '{}_{}x{}'.format(args.dataset, args.im_size[0], args.im_size[1])
+            assert model_key in model_weight_map.keys(), '{} does not exist'.format(model_key)
+            assert dataset_key in model_weight_map[model_key].keys(), '{} does not exist'.format(dataset_key)
+            args.weights_test = model_weight_map[model_key][dataset_key]['weights']
+            if not os.path.isfile(args.weights_test):
+                print_error_message('weight file does not exist: {}'.format(args.weights_test))
 
+        elif args.model == 'bisenetv2':
+            from model.semantic_segmentation.bisenetv2.weight_locations import model_weight_map
+
+            model_key = '{}'.format(args.model)
+            assert model_key in model_weight_map.keys(), '{} does not exist'.format(model_key)
+            args.weights_test = model_weight_map[model_key]['weights']
+            if not os.path.isfile(args.weights_test):
+                print_error_message('weight file does not exist: {}'.format(args.weights_test))
+
+        else:
+            print_error_message('{} network not yet supported'.format(args.model))
+            exit(-1)
+    
     # set-up results path
     if args.dataset == 'city':
         args.savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
