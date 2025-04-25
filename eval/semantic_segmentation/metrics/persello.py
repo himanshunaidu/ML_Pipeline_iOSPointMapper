@@ -207,11 +207,6 @@ class Persello(object):
         # print(oversegmentation_errors, undersegmentation_errors)
         return oversegmentation_errors.mean().item(), undersegmentation_errors.mean().item()
 
-class PerselloOld(object):
-    def __init__(self, num_classes=21, epsilon=1e-6):
-        self.num_classes = num_classes
-        self.epsilon = epsilon
-
 if __name__=="__main__":
     output: ByteTensor = torch.tensor(np.random.randint(0, 3, (1, 4, 4, 4))).byte()
     target: ByteTensor = torch.tensor([[2, 2, 2, 0],

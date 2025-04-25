@@ -26,6 +26,7 @@ class CustomEvaluation:
     """
     def __init__(self, *, num_classes, max_regions=1024, is_output_probabilities=True, 
                  idToClassMap=cityscapesIdToClassMap,
+                 miou_min_range=1, miou_max_range=None,
                  args):
         """
         Initialize the CustomEvaluation class.
@@ -55,7 +56,8 @@ class CustomEvaluation:
         self.romrum_old_under_meter = AverageMeter()
 
         self.miou_class = IOU(num_classes=num_classes, 
-                              is_output_probabilities=is_output_probabilities)
+                              is_output_probabilities=is_output_probabilities,
+                              min_range=miou_min_range, max_range=miou_max_range)
         self.dice_class = Dice(num_classes=num_classes, 
                                is_output_probabilities=is_output_probabilities)
         self.persello_class = Persello(num_classes=num_classes, max_regions=max_regions, 
@@ -77,6 +79,8 @@ class CustomEvaluation:
         self.num_classes = num_classes
         self.max_regions = max_regions
         self.idToClassMap = idToClassMap
+        self.miou_min_range = miou_min_range
+        self.miou_max_range = miou_max_range if miou_max_range is not None else num_classes
 
     def preprocess_for_old_metrics(self, output: torch.Tensor, target: torch.Tensor) -> tuple:
         """
