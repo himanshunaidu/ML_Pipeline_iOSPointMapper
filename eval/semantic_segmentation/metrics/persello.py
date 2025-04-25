@@ -7,6 +7,8 @@ import time
 class Persello(object):
     """
     Helps to calculate the Persello metric for semantic segmentation.
+
+    NOTE: While the function takes in 4D tensors, the first dimension, is supposed to be only 1 for the time being.
     """
     def __init__(self, num_classes=21, epsilon=1e-6, max_regions=255, is_output_probabilities=True):
         self.num_classes = num_classes

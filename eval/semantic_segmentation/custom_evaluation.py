@@ -9,7 +9,7 @@ from eval.semantic_segmentation.metrics.iou import IOU
 from eval.semantic_segmentation.metrics.dice import Dice
 from eval.semantic_segmentation.metrics.persello import Persello
 from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
-from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, idToClassMap
+from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, cityscapesIdToClassMap
 from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
 
 class CustomEvaluation:
@@ -24,7 +24,8 @@ class CustomEvaluation:
 
     Also calculates the time required to calculate the metrics.
     """
-    def __init__(self, *, num_classes, max_regions=1024, is_output_probabilities=True,
+    def __init__(self, *, num_classes, max_regions=1024, is_output_probabilities=True, 
+                 idToClassMap=cityscapesIdToClassMap,
                  args):
         """
         Initialize the CustomEvaluation class.
@@ -75,8 +76,9 @@ class CustomEvaluation:
         self.is_output_probabilities = is_output_probabilities
         self.num_classes = num_classes
         self.max_regions = max_regions
+        self.idToClassMap = idToClassMap
 
-    def preprocess_for_old_metrics(self, output: torch.Tensor, target: torch.Tensor):
+    def preprocess_for_old_metrics(self, output: torch.Tensor, target: torch.Tensor) -> tuple:
         """
         Preprocess the output and target tensors for the old metrics.
 
@@ -89,6 +91,11 @@ class CustomEvaluation:
         target : torch.Tensor
             The target segmentation mask.
             A 3D tensor with dimensions (batch_size, height, width).
+
+        Returns
+        -------
+        tuple
+            A tuple containing the preprocessed output and target numpy arrays.
         """
         if isinstance(output, tuple):
             output = output[0]
@@ -103,8 +110,11 @@ class CustomEvaluation:
         if target.device == torch.device('cuda'):
             target = target.cpu()
         
-        pred = pred.type(torch.ByteTensor)
-        target = target.type(torch.ByteTensor)
+        pred: torch.ByteTensor = pred.type(torch.ByteTensor)
+        target: torch.ByteTensor = target.type(torch.ByteTensor)
+
+        pred = pred.numpy()[0]
+        target = target.numpy()[0]
 
         return pred, target
 
@@ -156,4 +166,69 @@ class CustomEvaluation:
 
         ## Before calculating the old versions, we need to convert the output and target tensors
         # to numpy arrays and map the class indices to the old class indices
+        pred_pre_old, target_pre_old = self.preprocess_for_old_metrics(output, target)
+
+        # Calculate Persello (Old)
+        persello_old_start_time = time.time()
+        persello_old_over, persello_old_under = 0, 0
+        for class_id in self.idToClassMap.keys():
+            persello_old_over_c, persello_old_under_c = Persello_old(target_pre_old, pred_pre_old, class_id)
+            persello_old_over += persello_old_over_c
+            persello_old_under += persello_old_under_c
+        self.persello_old_over_list.append(persello_old_over)
+        self.persello_old_under_list.append(persello_old_under)
+        self.persello_old_over_meter.update(persello_old_over/len(self.idToClassMap.keys()))
+        self.persello_old_under_meter.update(persello_old_under/len(self.idToClassMap.keys()))
+        self.persello_old_times.append(time.time() - persello_old_start_time)
+
+        # Calculate ROM/RUM (Old)
+        romrum_old_start_time = time.time()
+        romrum_old_over, romrum_old_under = 0, 0
+        for class_id in self.idToClassMap.keys():
+            romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_pre_old, pred_pre_old, class_id)
+            romrum_old_over += romrum_old_over_c
+            romrum_old_under += romrum_old_under_c
+        self.romrum_old_over_list.append(romrum_old_over)
+        self.romrum_old_under_list.append(romrum_old_under)
+        self.romrum_old_over_meter.update(romrum_old_over/len(self.idToClassMap.keys()))
+        self.romrum_old_under_meter.update(romrum_old_under/len(self.idToClassMap.keys()))
+        self.romrum_old_times.append(time.time() - romrum_old_start_time)
+
+    def get_results(self):
+        """
+        Get the evaluation results.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the evaluation results.
+        """
+        iou = self.inter_meter.sum / (self.union_meter.sum + 1e-10)
+        dice = self.dice_numerator_meter.sum / (self.dice_denominator_meter.sum + 1e-10)
+        miou = iou.mean().item() # Need to item() to convert from array to scalar
+        mdice = dice.mean().item() # Need to item() to convert from array to scalar
+
+        persello_over = self.persello_over_meter.sum / (self.persello_over_meter.count + 1e-10)
+        persello_under = self.persello_under_meter.sum / (self.persello_under_meter.count + 1e-10)
+        romrum_over = self.romrum_over_meter.sum / (self.romrum_over_meter.count + 1e-10)
+        romrum_under = self.romrum_under_meter.sum / (self.romrum_under_meter.count + 1e-10)
+
+        persello_old_over = self.persello_old_over_meter.sum / (self.persello_old_over_meter.count + 1e-10)
+        persello_old_under = self.persello_old_under_meter.sum / (self.persello_old_under_meter.count + 1e-10)
+        romrum_old_over = self.romrum_old_over_meter.sum / (self.romrum_old_over_meter.count + 1e-10)
+        romrum_old_under = self.romrum_old_under_meter.sum / (self.romrum_old_under_meter.count + 1e-10)
+
+        results = {
+            'mIoU': miou,
+            'mDice': mdice,
+            'Persello_Oversegmentation': persello_over,
+            'Persello_Undersegmentation': persello_under,
+            'ROM_RUM_Oversegmentation': romrum_over,
+            'ROM_RUM_Undersegmentation': romrum_under,
+            'Persello_Oversegmentation_Old': persello_old_over,
+            'Persello_Undersegmentation_Old': persello_old_under,
+            'ROM_RUM_Oversegmentation_Old': romrum_old_over,
+            'ROM_RUM_Undersegmentation_Old': romrum_old_under
+        }
+        return results
 
