@@ -119,7 +119,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
         inputs: torch.Tensor = inputs.to(device=device)
         target: torch.Tensor = target.to(device=device).type(torch.ByteTensor)
 
-        img_out: torch.Tensor = model(inputs).type(torch.ByteTensor)
+        img_out: torch.Tensor = model(inputs)#.type(torch.ByteTensor)
 
         # Get the metrics
         for i in range(img_out.shape[0]):
