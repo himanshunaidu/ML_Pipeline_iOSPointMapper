@@ -225,10 +225,17 @@ class CustomEvaluation:
             'Persello_Undersegmentation': persello_under,
             'ROM_RUM_Oversegmentation': romrum_over,
             'ROM_RUM_Undersegmentation': romrum_under,
-            'Persello_Oversegmentation_Old': persello_old_over,
-            'Persello_Undersegmentation_Old': persello_old_under,
+            # 'Persello_Oversegmentation_Old': persello_old_over,
+            # 'Persello_Undersegmentation_Old': persello_old_under,
             'ROM_RUM_Oversegmentation_Old': romrum_old_over,
-            'ROM_RUM_Undersegmentation_Old': romrum_old_under
+            'ROM_RUM_Undersegmentation_Old': romrum_old_under,
+
+            'mIoU_times': self.miou_times,
+            'mDice_times': self.dice_times,
+            'Persello_times': self.persello_times,
+            'ROM_RUM_times': self.romrum_times,
+            'Persello_Old_times': self.persello_old_times,
+            'ROM_RUM_Old_times': self.romrum_old_times,
         }
         return results
 

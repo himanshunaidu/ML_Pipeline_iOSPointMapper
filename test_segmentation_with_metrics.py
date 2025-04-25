@@ -19,12 +19,8 @@ from utilities.utils import model_parameters, compute_flops
 from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_TRAIN_CMAP
 
 from eval.utils import AverageMeter
-from eval.semantic_segmentation.metrics.iou import IOU
-from eval.semantic_segmentation.metrics.dice import Dice
-from eval.semantic_segmentation.metrics.persello import Persello
-from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
-from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, idToClassMap
-from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
+from eval.semantic_segmentation.custom_evaluation import CustomEvaluation
+from eval.semantic_segmentation.metrics.old.persello import cityscapesIdToClassMap
 
 def preprocess_inputs(self, output, target, is_output_probabilities=True):
         if isinstance(output, tuple):
@@ -70,40 +66,6 @@ def grayscale_tensor_to_rgb_tensor(tensor, cmap):
 def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     im_size = tuple(args.im_size)
 
-    losses = AverageMeter()
-    batch_time = AverageMeter()
-    inter_meter = AverageMeter()
-    union_meter = AverageMeter()
-    persello_over_list = []
-    persello_under_list = []
-    persello_over_meter = AverageMeter()
-    persello_under_meter = AverageMeter()
-    romrum_over_list = []
-    romrum_under_list = []
-    romrum_over_meter = AverageMeter()
-    romrum_under_meter = AverageMeter()
-
-    persello_old_over_list = []
-    persello_old_under_list = []
-    persello_old_over_meter = AverageMeter()
-    persello_old_under_meter = AverageMeter()
-    romrum_old_over_list = []
-    romrum_old_under_list = []
-    romrum_old_over_meter = AverageMeter()
-    romrum_old_under_meter = AverageMeter()
-
-    miou_class = IOU(num_classes=args.classes)
-    persello_class = Persello(num_classes=args.classes, max_regions=1024)
-    romrum_class = ROMRUM(num_classes=args.classes, max_regions=1024)
-
-    # To record time taken for each metric
-    start_time = 0
-    miou_times = []
-    persello_times = []
-    romrum_times = []
-    persello_old_times = []
-    romrum_old_times = []
-
     # get color map for pascal dataset
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
@@ -112,6 +74,9 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
         cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
+
+    custom_eval = CustomEvaluation(num_classes=args.classes, max_regions=1024, is_output_probabilities=True, 
+                                   idToClassMap=cityscapesIdToClassMap, args=args)
 
     model.eval()
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
@@ -127,55 +92,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             target_i = target[i].unsqueeze(0)
             img_out_i = img_out[i].unsqueeze(0)
 
-            start_time = time.time()
-            inter, union = miou_class.get_iou(img_out_i, target_i)
-            inter_meter.update(inter)
-            union_meter.update(union)
-            miou_times.append(time.time() - start_time)
-
-            start_time = time.time()
-            persello_over, persello_under = persello_class.get_persello(img_out_i, target_i)
-            persello_over_list.append(persello_over)
-            persello_under_list.append(persello_under)
-            persello_over_meter.update(persello_over)
-            persello_under_meter.update(persello_under)
-            persello_times.append(time.time() - start_time)
-
-            start_time = time.time()
-            romrum_over, romrum_under = romrum_class.get_rom_rum(img_out_i, target_i)
-            romrum_over_list.append(romrum_over)
-            romrum_under_list.append(romrum_under)
-            romrum_over_meter.update(romrum_over)
-            romrum_under_meter.update(romrum_under)
-            romrum_times.append(time.time() - start_time)
-
-            # Get old persello metrics
-            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
-            img_out_processed, target_processed = img_out_processed.numpy()[0], target_processed.numpy()[0]
-
-            start_time = time.time()
-            persello_old_over, persello_old_under = 0, 0
-            for class_id in idToClassMap.keys():
-                persello_old_over_c, persello_old_under_c = Persello_old(target_processed, img_out_processed, class_id)
-                persello_old_over += persello_old_over_c
-                persello_old_under += persello_old_under_c
-            persello_old_over_list.append(persello_old_over)
-            persello_old_under_list.append(persello_old_under)
-            persello_old_over_meter.update(persello_old_over/len(idToClassMap.keys()))
-            persello_old_under_meter.update(persello_old_under/len(idToClassMap.keys()))
-            persello_old_times.append(time.time() - start_time)
-
-            start_time = time.time()
-            romrum_old_over, romrum_old_under = 0, 0
-            for class_id in idToClassMap.keys():
-                romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_processed, img_out_processed, class_id)
-                romrum_old_over += romrum_old_over_c
-                romrum_old_under += romrum_old_under_c
-            romrum_old_over_list.append(romrum_old_over)
-            romrum_old_under_list.append(romrum_old_under)
-            romrum_old_over_meter.update(math.tanh(romrum_old_over))#/len(idToClassMap.keys()))
-            romrum_old_under_meter.update(math.tanh(romrum_old_under))#/len(idToClassMap.keys()))
-            romrum_old_times.append(time.time() - start_time)
+            custom_eval.update(output=img_out_i, target=target_i)
 
             # Save the images
             img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
@@ -190,41 +107,8 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
             img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
 
-    iou = inter_meter.sum / (union_meter.sum + 1e-10)
-    dice = 2 * inter_meter.sum / (inter_meter.sum + union_meter.sum + 1e-10)
-    miou = iou.mean()
-    mdice = dice.mean()
-
-    persello_over = persello_over_meter.sum / (persello_over_meter.count + 1e-10)
-    persello_under = persello_under_meter.sum / (persello_under_meter.count + 1e-10)
-    romrum_over = romrum_over_meter.sum / (romrum_over_meter.count + 1e-10)
-    romrum_under = romrum_under_meter.sum / (romrum_under_meter.count + 1e-10)
-
-    persello_old_over = persello_old_over_meter.sum / (persello_old_over_meter.count + 1e-10)
-    persello_old_under = persello_old_under_meter.sum / (persello_old_under_meter.count + 1e-10)
-    romrum_old_over = romrum_old_over_meter.sum / (romrum_old_over_meter.count + 1e-10)
-    romrum_old_under = romrum_old_under_meter.sum / (romrum_old_under_meter.count + 1e-10)
-
-    # Save the results
-    save_object = {
-        'mIoU': miou.item(),
-        'mDice': mdice.item(),
-        # 'Persello Over': persello_over_list,
-        # 'Persello Under': persello_under_list,
-        'ROM Over': romrum_over_list,
-        'ROM Under': romrum_under_list,
-
-        # 'Persello Old Over': persello_old_over_list,
-        # 'Persello Old Under': persello_old_under_list,
-        'ROM Old Over': romrum_old_over_list,
-        'ROM Old Under': romrum_old_under_list,
-
-        'mIoU time': miou_times,
-        'Persello time': persello_times,
-        'ROM time': romrum_times,
-        'Persello Old time': persello_old_times,
-        'ROM Old time': romrum_old_times,
-    }
+    # Get the metrics
+    save_object = custom_eval.get_results()
     save_path = os.path.join(args.savedir, 'metrics.json')
     with open(save_path, 'w') as f:
         json.dump(save_object, f, indent=4)
