@@ -261,7 +261,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    # dataset = torch.utils.data.Subset(dataset, range(10))
+    dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))

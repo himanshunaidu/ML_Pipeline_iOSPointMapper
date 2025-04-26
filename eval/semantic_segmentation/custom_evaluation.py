@@ -31,6 +31,15 @@ class CustomEvaluation:
         """
         Initialize the CustomEvaluation class.
         """
+        # Save the arguments
+        self.args = args
+        self.is_output_probabilities = is_output_probabilities
+        self.num_classes = num_classes
+        self.max_regions = max_regions
+        self.idToClassMap = idToClassMap
+        self.miou_min_range = miou_min_range
+        self.miou_max_range = miou_max_range if miou_max_range is not None else num_classes
+
         self.losses = AverageMeter()
         self.batch_time = AverageMeter()
         self.inter_meter = AverageMeter()
@@ -55,15 +64,16 @@ class CustomEvaluation:
         self.romrum_old_over_meter = AverageMeter()
         self.romrum_old_under_meter = AverageMeter()
 
-        self.miou_class = IOU(num_classes=num_classes, 
-                              is_output_probabilities=is_output_probabilities,
-                              min_range=miou_min_range, max_range=miou_max_range)
-        self.dice_class = Dice(num_classes=num_classes, 
-                               is_output_probabilities=is_output_probabilities)
-        self.persello_class = Persello(num_classes=num_classes, max_regions=max_regions, 
-                                       is_output_probabilities=is_output_probabilities)
-        self.romrum_class = ROMRUM(num_classes=num_classes, max_regions=max_regions,
-                                   is_output_probabilities=is_output_probabilities)
+        self.miou_class = IOU(num_classes=self.num_classes, 
+                              is_output_probabilities=self.is_output_probabilities,
+                              min_range=self.miou_min_range, max_range=self.miou_max_range)
+        self.dice_class = Dice(num_classes=self.num_classes, 
+                               is_output_probabilities=self.is_output_probabilities,
+                               min_range=self.miou_min_range, max_range=self.miou_max_range)
+        self.persello_class = Persello(num_classes=self.num_classes, max_regions=self.max_regions, 
+                                       is_output_probabilities=self.is_output_probabilities)
+        self.romrum_class = ROMRUM(num_classes=self.num_classes, max_regions=self.max_regions,
+                                   is_output_probabilities=self.is_output_probabilities)
 
         # To record time taken for each metric
         self.miou_times = []
@@ -72,15 +82,6 @@ class CustomEvaluation:
         self.romrum_times = []
         self.persello_old_times = []
         self.romrum_old_times = []
-
-        # Save the arguments
-        self.args = args
-        self.is_output_probabilities = is_output_probabilities
-        self.num_classes = num_classes
-        self.max_regions = max_regions
-        self.idToClassMap = idToClassMap
-        self.miou_min_range = miou_min_range
-        self.miou_max_range = miou_max_range if miou_max_range is not None else num_classes
 
     def preprocess_for_old_metrics(self, output: torch.Tensor, target: torch.Tensor) -> tuple:
         """
@@ -114,8 +115,8 @@ class CustomEvaluation:
         if target.device == torch.device('cuda'):
             target = target.cpu()
         
-        pred: torch.ByteTensor = pred.type(torch.ByteTensor)
-        target: torch.ByteTensor = target.type(torch.ByteTensor)
+        pred: torch.ByteTensor = pred.type(torch.ByteTensor).clone()
+        target: torch.ByteTensor = target.type(torch.ByteTensor).clone()
 
         pred = pred.numpy()[0]
         target = target.numpy()[0]
@@ -136,6 +137,12 @@ class CustomEvaluation:
             The target segmentation mask.
             A 3D tensor with dimensions (batch_size, height, width).
         """
+        # Clone the output and target tensors to avoid modifying the original tensors
+        # if isinstance(output, tuple):
+        #     output = output[0]
+        # output = output.clone()
+        # target = target.clone()
+
         # Calculate mIoU
         iou_start_time = time.time()
         area_inter, area_union = self.miou_class.get_iou(output, target)
