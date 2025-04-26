@@ -82,7 +82,8 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
     for index, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
         inputs: torch.Tensor = inputs.to(device=device)
-        target: torch.Tensor = target.to(device=device).type(torch.ByteTensor)
+        inputs = data_transform(inputs, args.mean, args.std)
+        target: torch.Tensor = target.to(device=device)#.type(torch.ByteTensor)
 
         img_out: torch.Tensor = model(inputs)#.type(torch.ByteTensor)
 
@@ -96,6 +97,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 
             # Save the images
             img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
+            target_i = target_i.type(torch.ByteTensor)
             target_i_image = F.to_pil_image(target_i.cpu()*10)
             target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
             target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
