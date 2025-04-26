@@ -7,6 +7,8 @@ import time
 class Persello(object):
     """
     Helps to calculate the Persello metric for semantic segmentation.
+
+    NOTE: While the function takes in 4D tensors, the first dimension, is supposed to be only 1 for the time being.
     """
     def __init__(self, num_classes=21, epsilon=1e-6, max_regions=255, is_output_probabilities=True):
         self.num_classes = num_classes
@@ -204,11 +206,6 @@ class Persello(object):
         # Ignore the background label of target_regions
         # print(oversegmentation_errors, undersegmentation_errors)
         return oversegmentation_errors.mean().item(), undersegmentation_errors.mean().item()
-
-class PerselloOld(object):
-    def __init__(self, num_classes=21, epsilon=1e-6):
-        self.num_classes = num_classes
-        self.epsilon = epsilon
 
 if __name__=="__main__":
     output: ByteTensor = torch.tensor(np.random.randint(0, 3, (1, 4, 4, 4))).byte()

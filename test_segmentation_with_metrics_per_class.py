@@ -13,6 +13,7 @@ import time
 from PIL import Image
 from torchvision.transforms import functional as F
 from tqdm import tqdm
+import torch.bin
 from utilities.print_utils import *
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from utilities.utils import model_parameters, compute_flops
@@ -22,7 +23,10 @@ from eval.utils import AverageMeter
 from eval.semantic_segmentation.custom_evaluation import CustomEvaluation
 from eval.semantic_segmentation.metrics.old.persello import cityscapesIdToClassMap
 
-def preprocess_inputs(self, output, target, is_output_probabilities=True):
+def preprocess_inputs(output, target, is_output_probabilities=True):
+        """
+        Preprocess the output and target tensors to get the predictions and ground truth.
+        """
         if isinstance(output, tuple):
             output = output[0]
 
@@ -77,13 +81,19 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 
     custom_eval = CustomEvaluation(num_classes=args.classes, max_regions=1024, is_output_probabilities=True, 
                                    idToClassMap=cityscapesIdToClassMap, args=args)
+    # Also get custom evaluation metrics per class
+    ## This will take in non-probability outputs to make the evaluation easier
+    # custom_eval_per_class = [
+    #     CustomEvaluation(num_classes=1, max_regions=1024, is_output_probabilities=False,
+    #                      idToClassMap={0: 'road'}, miou_min_range=1, miou_max_range=2,
+    #                      args=args) for _ in range(args.classes)
+    # ]
 
     model.eval()
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
     for index, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
         inputs: torch.Tensor = inputs.to(device=device)
-        inputs = data_transform(inputs, args.mean, args.std)
-        target: torch.Tensor = target.to(device=device)#.type(torch.ByteTensor)
+        target: torch.Tensor = target.to(device=device).type(torch.ByteTensor)
 
         img_out: torch.Tensor = model(inputs)#.type(torch.ByteTensor)
 
@@ -94,10 +104,20 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             img_out_i = img_out[i].unsqueeze(0)
 
             custom_eval.update(output=img_out_i, target=target_i)
+            img_out_processed, target_processed = preprocess_inputs(img_out_i, target_i)
+
+            # for j in range(args.classes):
+            #     # Set class j to 0 in the output and target tensors
+            #     # Set every other class to 255 in the output and target tensors
+            #     img_out_processed_j = img_out_processed.clone()
+            #     img_out_processed_j[img_out_processed_j != j] = 255
+            #     img_out_processed_j[img_out_processed_j == j] = 0
+            #     target_processed_j = target_processed.clone()
+            #     target_processed_j[target_processed_j != j] = 255
+            #     target_processed_j[target_processed_j == j] = 0
+            #     custom_eval_per_class[j].update(output=img_out_processed_j, target=target_processed_j)
 
             # Save the images
-            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
-            target_i = target_i.type(torch.ByteTensor)
             target_i_image = F.to_pil_image(target_i.cpu()*10)
             target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
             target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
@@ -111,9 +131,19 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 
     # Get the metrics
     save_object = custom_eval.get_results()
-    save_path = os.path.join(args.savedir, 'metrics.json')
+    # save_object['type'] = 'all'
+    # for i in range(args.classes):
+    #     save_object_per_class = custom_eval_per_class[i].get_results()
+    #     save_object_per_class['type'] = 'class_{}'.format(i)
+    save_path = os.path.join(args.savedir, 'metrics.jsonl')
     with open(save_path, 'w') as f:
-        json.dump(save_object, f, indent=4)
+        json.dump(save_object, f)
+        # f.write('\n')
+        # for i in range(args.classes):
+        #     save_object_per_class = custom_eval_per_class[i].get_results()
+        #     save_object_per_class['type'] = 'class_{}'.format(i)
+        #     json.dump(save_object_per_class, f)
+        #     f.write('\n')
     print_info_message('Metrics saved to {}'.format(save_path))
 
 def main(args):
@@ -147,7 +177,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(10))
+    # dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))

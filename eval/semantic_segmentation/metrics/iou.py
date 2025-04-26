@@ -20,10 +20,13 @@ class IOU(object):
     epsilon : float
         A small value added to the union to avoid division by zero.
     """
-    def __init__(self, num_classes=21, epsilon=1e-6, is_output_probabilities=True):
+    def __init__(self, num_classes=21, epsilon=1e-6, is_output_probabilities=True, 
+                 min_range=1, max_range=None):
         self.num_classes = num_classes
         self.epsilon = epsilon
         self.is_output_probabilities = is_output_probabilities
+        self.min_range = min_range
+        self.max_range = max_range if max_range is not None else num_classes
 
     def get_iou(self, output: torch.Tensor, target: torch.Tensor):
         """
@@ -71,9 +74,9 @@ class IOU(object):
 
         pred = pred * (target > 0)
         inter = pred * (pred == target)
-        area_inter = torch.histc(inter.float(), bins=self.num_classes, min=1, max=self.num_classes)
-        area_pred = torch.histc(pred.float(), bins=self.num_classes, min=1, max=self.num_classes)
-        area_mask = torch.histc(target.float(), bins=self.num_classes, min=1, max=self.num_classes)
+        area_inter = torch.histc(inter.float(), bins=self.num_classes, min=self.min_range, max=self.max_range)
+        area_pred = torch.histc(pred.float(), bins=self.num_classes, min=self.min_range, max=self.max_range)
+        area_mask = torch.histc(target.float(), bins=self.num_classes, min=self.min_range, max=self.max_range)
         area_union = area_pred + area_mask - area_inter + self.epsilon
 
         return area_inter.numpy(), area_union.numpy()
