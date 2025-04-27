@@ -1,8 +1,3 @@
-"""
-This experimental script is used to evaluate the performance of a semantic segmentation model on a dataset.
-Only BiSeNetv2 in this script.
-"""
-
 import torch
 import glob
 import os
@@ -10,16 +5,12 @@ import json
 import math
 from argparse import ArgumentParser
 import time
-import numpy as np
 from PIL import Image
 from torchvision.transforms import functional as F
 from tqdm import tqdm
 from utilities.print_utils import *
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from utilities.utils import model_parameters, compute_flops
-from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_TRAIN_CMAP
-
-import coremltools as ct
 
 from eval.utils import AverageMeter
 from eval.semantic_segmentation.metrics.iou import IOU
@@ -29,18 +20,45 @@ from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
 from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, idToClassMap
 from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
 
-def preprocess_inputs(self, output, target, is_output_probabilities=True):
+
+def relabel(img):
+    '''
+    This function relabels the predicted labels so that cityscape dataset can process
+    :param img:
+    :return:
+    '''
+    img[img == 19] = 255
+    img[img == 18] = 33
+    img[img == 17] = 32
+    img[img == 16] = 31
+    img[img == 15] = 28
+    img[img == 14] = 27
+    img[img == 13] = 26
+    img[img == 12] = 25
+    img[img == 11] = 24
+    img[img == 10] = 23
+    img[img == 9] = 22
+    img[img == 8] = 21
+    img[img == 7] = 20
+    img[img == 6] = 19
+    img[img == 5] = 17
+    img[img == 4] = 13
+    img[img == 3] = 12
+    img[img == 2] = 11
+    img[img == 1] = 8
+    img[img == 0] = 7
+    img[img == 255] = 0
+    return img
+
+def preprocess_inputs(self, output, target):
         if isinstance(output, tuple):
             output = output[0]
 
-        if is_output_probabilities:
-            _, pred = torch.max(output, 1)
-        else:
-            pred = output
+        _, pred = torch.max(output, 1)
 
-        if pred.device == torch.device('mps'):
+        if pred.device == torch.device('cuda'):
             pred = pred.cpu()
-        if target.device == torch.device('mps'):
+        if target.device == torch.device('cuda'):
             target = target.cpu()
         
         pred = pred.type(torch.ByteTensor)
@@ -48,24 +66,6 @@ def preprocess_inputs(self, output, target, is_output_probabilities=True):
 
         return pred, target
 
-def grayscale_tensor_to_rgb_tensor(tensor, cmap):
-    """
-    Convert a grayscale tensor to an RGB tensor using a colormap.
-    :param tensor: Grayscale tensor of shape (C, H, W)
-    :param cmap: Colormap to use for conversion (dict mapping grayscale values to RGB tuples)
-    :return: RGB tensor of shape (3, H, W)
-    """
-    # Create an empty RGB tensor
-    rgb_tensor = torch.zeros((3, tensor.shape[1], tensor.shape[2]), dtype=torch.uint8)
-    # Iterate over the grayscale values and assign the corresponding RGB values
-    for i in range(256):
-        if i in cmap:
-            rgb_tensor[0][tensor[0] == i] = cmap[i][0]
-            rgb_tensor[1][tensor[0] == i] = cmap[i][1]
-            rgb_tensor[2][tensor[0] == i] = cmap[i][2]
-
-    return rgb_tensor
-    
 
 def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     im_size = tuple(args.im_size)
@@ -92,9 +92,9 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     romrum_old_over_meter = AverageMeter()
     romrum_old_under_meter = AverageMeter()
 
-    miou_class = IOU(num_classes=args.classes, is_output_probabilities=False)
-    persello_class = Persello(num_classes=args.classes, max_regions=1024, is_output_probabilities=False)
-    romrum_class = ROMRUM(num_classes=args.classes, max_regions=1024, is_output_probabilities=False)
+    miou_class = IOU(num_classes=args.classes)
+    persello_class = Persello(num_classes=args.classes, max_regions=1024)
+    romrum_class = ROMRUM(num_classes=args.classes, max_regions=1024)
 
     # To record time taken for each metric
     start_time = 0
@@ -108,19 +108,16 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
         cmap = VOCColormap().get_color_map_voc()
-    elif args.dataset == 'city':
-        cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
 
+    model.eval()
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
     for index, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
-        input_img = F.to_pil_image(inputs[0].cpu())
-        target: torch.Tensor = target.to(device=device).type(torch.ByteTensor)
+        inputs: torch.Tensor = inputs.to(device=device)
+        target: torch.Tensor = target.to(device=device)
 
-        img_out = model.predict({"input": input_img})['output'] # ImageFile
-        img_out = F.to_tensor(img_out).to(device=device) * 255.0
-        img_out = img_out.type(torch.ByteTensor)
+        img_out: torch.Tensor = model(inputs)
 
         # Get the metrics
         for i in range(img_out.shape[0]):
@@ -151,7 +148,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             romrum_times.append(time.time() - start_time)
 
             # Get old persello metrics
-            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i, False)
+            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
             img_out_processed, target_processed = img_out_processed.numpy()[0], target_processed.numpy()[0]
 
             start_time = time.time()
@@ -177,18 +174,6 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             romrum_old_over_meter.update(math.tanh(romrum_old_over))#/len(idToClassMap.keys()))
             romrum_old_under_meter.update(math.tanh(romrum_old_under))#/len(idToClassMap.keys()))
             romrum_old_times.append(time.time() - start_time)
-
-            # Save the images
-            target_i_image = F.to_pil_image(target_i.cpu()*10)
-            target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
-            target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
-            target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
-            target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
-            img_out_image = F.to_pil_image(img_out_i.cpu()*10)
-            img_out_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index*args.batch_size + i)))
-            img_out_rgb_image = grayscale_tensor_to_rgb_tensor(img_out_i, cmap)
-            img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
-            img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
 
     iou = inter_meter.sum / (union_meter.sum + 1e-10)
     dice = 2 * inter_meter.sum / (inter_meter.sum + union_meter.sum + 1e-10)
@@ -237,48 +222,65 @@ def main(args):
         dataset = CityscapesSegmentationTest(root=args.data_path, size=args.im_size, scale=args.s,
                                              coarse=False, split=args.split)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
-    elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-        image_path = os.path.join(args.data_path, "rgb", "*.png")
-        image_list = glob.glob(image_path)
-        from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
-        seg_classes = len(EDGE_MAPPING_CLASS_LIST)
-    elif args.dataset == 'pascal':
-        from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
-        seg_classes = len(VOC_CLASS_LIST)
-        data_file = os.path.join(args.data_path, 'VOC2012', 'list', '{}.txt'.format(args.split))
-        if not os.path.isfile(data_file):
-            print_error_message('{} file does not exist'.format(data_file))
-        image_list = []
-        with open(data_file, 'r') as lines:
-            for line in lines:
-                rgb_img_loc = '{}/{}/{}'.format(args.data_path, 'VOC2012', line.split()[0])
-                if not os.path.isfile(rgb_img_loc):
-                    print_error_message('{} image file does not exist'.format(rgb_img_loc))
-                image_list.append(rgb_img_loc)
+    # elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
+    #     image_path = os.path.join(args.data_path, "rgb", "*.png")
+    #     image_list = glob.glob(image_path)
+    #     from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+    #     seg_classes = len(EDGE_MAPPING_CLASS_LIST)
+    # elif args.dataset == 'pascal':
+    #     from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
+    #     seg_classes = len(VOC_CLASS_LIST)
+    #     data_file = os.path.join(args.data_path, 'VOC2012', 'list', '{}.txt'.format(args.split))
+    #     if not os.path.isfile(data_file):
+    #         print_error_message('{} file does not exist'.format(data_file))
+    #     image_list = []
+    #     with open(data_file, 'r') as lines:
+    #         for line in lines:
+    #             rgb_img_loc = '{}/{}/{}'.format(args.data_path, 'VOC2012', line.split()[0])
+    #             if not os.path.isfile(rgb_img_loc):
+    #                 print_error_message('{} image file does not exist'.format(rgb_img_loc))
+    #             image_list.append(rgb_img_loc)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
         exit(-1)
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(10))
+    # dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
 
-    # Load the model
-    if args.weights_test:
-        model = ct.models.MLModel(args.weights_test)
+    if args.model == 'espnetv2':
+        from model.semantic_segmentation.espnetv2.espnetv2 import espnetv2_seg
         args.classes = seg_classes
+        model = espnetv2_seg(args)
+    else:
+        print_error_message('{} network not yet supported'.format(args.model))
+        exit(-1)
+
+    # mdoel information
+    num_params = model_parameters(model)
+    flops = compute_flops(model, input=torch.Tensor(1, 3, args.im_size[0], args.im_size[1]))
+    print_info_message('FLOPs for an input of size {}x{}: {:.2f} million'.format(args.im_size[0], args.im_size[1], flops))
+    print_info_message('# of parameters: {}'.format(num_params))
+
+    if args.weights_test:
+        print_info_message('Loading model weights')
+        weight_dict = torch.load(args.weights_test, map_location=torch.device('cpu'))
+        model.load_state_dict(weight_dict)
+        print_info_message('Weight loaded successfully')
     else:
         print_error_message('weight file does not exist or not specified. Please check: {}', format(args.weights_test))
 
+    num_gpus = torch.cuda.device_count()
+    device = 'cuda' if num_gpus > 0 else 'cpu'
+    model = model.to(device=device)
+
     if not os.path.isdir(args.savedir):
         os.makedirs(args.savedir)
-        os.makedirs(os.path.join(args.savedir, 'target'))
-        os.makedirs(os.path.join(args.savedir, 'pred'))
 
-    evaluate(args, model, dataset_loader, device='cpu')
+    evaluate(args, model, dataset_loader, device=device)
 
 
 if __name__ == '__main__':
@@ -288,30 +290,43 @@ if __name__ == '__main__':
     # general details
     parser.add_argument('--workers', type=int, default=4, help='number of data loading workers')
     # mdoel details
-    parser.add_argument('--model', default="bisenetv2", choices=segmentation_models, help='Model name')
+    parser.add_argument('--model', default="espnetv2", choices=segmentation_models, help='Model name')
     parser.add_argument('--weights-test', default='', help='Pretrained weights directory.')
-    parser.add_argument('--s', default=2.0, type=float, help='scale') # Do not use this for now
+    parser.add_argument('--s', default=2.0, type=float, help='scale')
     # dataset details
     parser.add_argument('--data-path', default="", help='Data directory')
     parser.add_argument('--dataset', default='city', choices=segmentation_datasets, help='Dataset name')
     # input details
-    parser.add_argument('--im-size', type=int, nargs="+", default=[1024, 512], help='Image size for testing (W x H)')
+    parser.add_argument('--im-size', type=int, nargs="+", default=[512, 256], help='Image size for testing (W x H)')
     parser.add_argument('--split', default='val', choices=['train', 'val', 'test'], help='data split')
-    # parser.add_argument('--batch-size', type=int, default=4, help='list of batch sizes')
+    parser.add_argument('--batch-size', type=int, default=4, help='list of batch sizes')
+    parser.add_argument('--model-width', default=224, type=int, help='Model width')
+    parser.add_argument('--model-height', default=224, type=int, help='Model height')
+    parser.add_argument('--channels', default=3, type=int, help='Input channels')
     parser.add_argument('--num-classes', default=1000, type=int,
                         help='ImageNet classes. Required for loading the base network')
-    parser.add_argument('--savedir', type=str, default='./results_test_coreml', help='Location to save the results')
+    parser.add_argument('--savedir', type=str, default='./results_segmentation_test', help='Location to save the results')
 
     args = parser.parse_args()
-    args.batch_size = 1
-    
+
+    if not args.weights_test:
+        from model.semantic_segmentation.espnetv2.weight_locations import model_weight_map
+
+        model_key = '{}_{}'.format(args.model, args.s)
+        dataset_key = '{}_{}x{}'.format(args.dataset, args.im_size[0], args.im_size[1])
+        assert model_key in model_weight_map.keys(), '{} does not exist'.format(model_key)
+        assert dataset_key in model_weight_map[model_key].keys(), '{} does not exist'.format(dataset_key)
+        args.weights_test = model_weight_map[model_key][dataset_key]['weights']
+        if not os.path.isfile(args.weights_test):
+            print_error_message('weight file does not exist: {}'.format(args.weights_test))
+
     # set-up results path
     if args.dataset == 'city':
-        args.savedir = 'results_test_coreml/{}_{}_{}'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-        args.savedir = 'results_test_coreml/{}_{}/{}'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
-        args.savedir = 'results_test_coreml/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
+        args.savedir = 'results_test/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
 

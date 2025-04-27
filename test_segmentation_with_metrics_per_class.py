@@ -1,6 +1,6 @@
 """
 This experimental script is used to evaluate the performance of a semantic segmentation model on a dataset.
-Only BiSeNetv2 in this script.
+Only BiSeNetv2 and ESPNetv2 in this script.
 """
 
 import torch
@@ -13,23 +13,27 @@ import time
 from PIL import Image
 from torchvision.transforms import functional as F
 from tqdm import tqdm
+import torch.bin
 from utilities.print_utils import *
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from utilities.utils import model_parameters, compute_flops
+from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_TRAIN_CMAP
 
 from eval.utils import AverageMeter
-from eval.semantic_segmentation.metrics.iou import IOU
-from eval.semantic_segmentation.metrics.dice import Dice
-from eval.semantic_segmentation.metrics.persello import Persello
-from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
-from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, idToClassMap
-from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
+from eval.semantic_segmentation.custom_evaluation import CustomEvaluation
+from eval.semantic_segmentation.metrics.old.persello import cityscapesIdToClassMap
 
-def preprocess_inputs(self, output, target):
+def preprocess_inputs(output, target, is_output_probabilities=True):
+        """
+        Preprocess the output and target tensors to get the predictions and ground truth.
+        """
         if isinstance(output, tuple):
             output = output[0]
 
-        _, pred = torch.max(output, 1)
+        if is_output_probabilities:
+            _, pred = torch.max(output, 1)
+        else:
+            pred = output
 
         if pred.device == torch.device('cuda'):
             pred = pred.cpu()
@@ -41,58 +45,58 @@ def preprocess_inputs(self, output, target):
 
         return pred, target
 
+def data_transform(input, mean, std):
+    input = F.normalize(input, mean, std)  # normalize the tensor
+    return input
+
+def grayscale_tensor_to_rgb_tensor(tensor, cmap):
+    """
+    Convert a grayscale tensor to an RGB tensor using a colormap.
+    :param tensor: Grayscale tensor of shape (C, H, W)
+    :param cmap: Colormap to use for conversion (dict mapping grayscale values to RGB tuples)
+    :return: RGB tensor of shape (3, H, W)
+    """
+    # Create an empty RGB tensor
+    rgb_tensor = torch.zeros((3, tensor.shape[1], tensor.shape[2]), dtype=torch.uint8)
+    # Iterate over the grayscale values and assign the corresponding RGB values
+    for i in range(256):
+        if i in cmap:
+            rgb_tensor[0][tensor[0] == i] = cmap[i][0]
+            rgb_tensor[1][tensor[0] == i] = cmap[i][1]
+            rgb_tensor[2][tensor[0] == i] = cmap[i][2]
+
+    return rgb_tensor
 
 def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     im_size = tuple(args.im_size)
-
-    losses = AverageMeter()
-    batch_time = AverageMeter()
-    inter_meter = AverageMeter()
-    union_meter = AverageMeter()
-    persello_over_list = []
-    persello_under_list = []
-    persello_over_meter = AverageMeter()
-    persello_under_meter = AverageMeter()
-    romrum_over_list = []
-    romrum_under_list = []
-    romrum_over_meter = AverageMeter()
-    romrum_under_meter = AverageMeter()
-
-    persello_old_over_list = []
-    persello_old_under_list = []
-    persello_old_over_meter = AverageMeter()
-    persello_old_under_meter = AverageMeter()
-    romrum_old_over_list = []
-    romrum_old_under_list = []
-    romrum_old_over_meter = AverageMeter()
-    romrum_old_under_meter = AverageMeter()
-
-    miou_class = IOU(num_classes=args.classes)
-    persello_class = Persello(num_classes=args.classes, max_regions=1024)
-    romrum_class = ROMRUM(num_classes=args.classes, max_regions=1024)
-
-    # To record time taken for each metric
-    start_time = 0
-    miou_times = []
-    persello_times = []
-    romrum_times = []
-    persello_old_times = []
-    romrum_old_times = []
 
     # get color map for pascal dataset
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
         cmap = VOCColormap().get_color_map_voc()
+    elif args.dataset == 'city':
+        cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
 
+    custom_eval = CustomEvaluation(num_classes=args.classes, max_regions=1024, is_output_probabilities=True, 
+                                   idToClassMap=cityscapesIdToClassMap, args=args)
+    # Also get custom evaluation metrics per class
+    # This will take in non-probability outputs to make the evaluation easier
+    custom_eval_per_class = [
+        CustomEvaluation(num_classes=1, max_regions=1024, is_output_probabilities=False,
+                         idToClassMap={0: 'road'}, miou_min_range=1, miou_max_range=2,
+                         args=args) for _ in range(args.classes)
+    ]
+
     model.eval()
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
-    for i, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
+    for index, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
         inputs: torch.Tensor = inputs.to(device=device)
-        target: torch.Tensor = target.to(device=device)
+        inputs = data_transform(inputs, args.mean, args.std)
+        target: torch.Tensor = target.to(device=device)#.type(torch.ByteTensor)
 
-        img_out: torch.Tensor = model(inputs)
+        img_out: torch.Tensor = model(inputs)#.type(torch.ByteTensor)
 
         # Get the metrics
         for i in range(img_out.shape[0]):
@@ -100,94 +104,48 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             target_i = target[i].unsqueeze(0)
             img_out_i = img_out[i].unsqueeze(0)
 
-            start_time = time.time()
-            inter, union = miou_class.get_iou(img_out_i, target_i)
-            inter_meter.update(inter)
-            union_meter.update(union)
-            miou_times.append(time.time() - start_time)
+            custom_eval.update(output=img_out_i, target=target_i)
+            img_out_processed, target_processed = preprocess_inputs(img_out_i, target_i)
 
-            start_time = time.time()
-            persello_over, persello_under = persello_class.get_persello(img_out_i, target_i)
-            persello_over_list.append(persello_over)
-            persello_under_list.append(persello_under)
-            persello_over_meter.update(persello_over)
-            persello_under_meter.update(persello_under)
-            persello_times.append(time.time() - start_time)
+            for j in range(args.classes):
+                # Set class j to 0 in the output and target tensors
+                # Set every other class to 255 in the output and target tensors
+                img_out_processed_j = img_out_processed.clone()
+                img_out_processed_j[img_out_processed_j != j] = 255
+                img_out_processed_j[img_out_processed_j == j] = 0
+                target_processed_j = target_processed.clone()
+                target_processed_j[target_processed_j != j] = 255
+                target_processed_j[target_processed_j == j] = 0
+                custom_eval_per_class[j].update(output=img_out_processed_j, target=target_processed_j)
 
-            start_time = time.time()
-            romrum_over, romrum_under = romrum_class.get_rom_rum(img_out_i, target_i)
-            romrum_over_list.append(romrum_over)
-            romrum_under_list.append(romrum_under)
-            romrum_over_meter.update(romrum_over)
-            romrum_under_meter.update(romrum_under)
-            romrum_times.append(time.time() - start_time)
+            # Save the images
+            target_i = target_i.type(torch.ByteTensor)
+            target_i_image = F.to_pil_image(target_i.cpu()*10)
+            target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
+            target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
+            target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
+            target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
+            img_out_image = F.to_pil_image(img_out_processed.cpu()*10)
+            img_out_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index*args.batch_size + i)))
+            img_out_rgb_image = grayscale_tensor_to_rgb_tensor(img_out_processed, cmap)
+            img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
+            img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
 
-            # Get old persello metrics
-            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
-            img_out_processed, target_processed = img_out_processed.numpy()[0], target_processed.numpy()[0]
-
-            start_time = time.time()
-            persello_old_over, persello_old_under = 0, 0
-            for class_id in idToClassMap.keys():
-                persello_old_over_c, persello_old_under_c = Persello_old(target_processed, img_out_processed, class_id)
-                persello_old_over += persello_old_over_c
-                persello_old_under += persello_old_under_c
-            persello_old_over_list.append(persello_old_over)
-            persello_old_under_list.append(persello_old_under)
-            persello_old_over_meter.update(persello_old_over/len(idToClassMap.keys()))
-            persello_old_under_meter.update(persello_old_under/len(idToClassMap.keys()))
-            persello_old_times.append(time.time() - start_time)
-
-            start_time = time.time()
-            romrum_old_over, romrum_old_under = 0, 0
-            for class_id in idToClassMap.keys():
-                romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_processed, img_out_processed, class_id)
-                romrum_old_over += romrum_old_over_c
-                romrum_old_under += romrum_old_under_c
-            romrum_old_over_list.append(romrum_old_over)
-            romrum_old_under_list.append(romrum_old_under)
-            romrum_old_over_meter.update(math.tanh(romrum_old_over))#/len(idToClassMap.keys()))
-            romrum_old_under_meter.update(math.tanh(romrum_old_under))#/len(idToClassMap.keys()))
-            romrum_old_times.append(time.time() - start_time)
-
-    iou = inter_meter.sum / (union_meter.sum + 1e-10)
-    dice = 2 * inter_meter.sum / (inter_meter.sum + union_meter.sum + 1e-10)
-    miou = iou.mean()
-    mdice = dice.mean()
-
-    persello_over = persello_over_meter.sum / (persello_over_meter.count + 1e-10)
-    persello_under = persello_under_meter.sum / (persello_under_meter.count + 1e-10)
-    romrum_over = romrum_over_meter.sum / (romrum_over_meter.count + 1e-10)
-    romrum_under = romrum_under_meter.sum / (romrum_under_meter.count + 1e-10)
-
-    persello_old_over = persello_old_over_meter.sum / (persello_old_over_meter.count + 1e-10)
-    persello_old_under = persello_old_under_meter.sum / (persello_old_under_meter.count + 1e-10)
-    romrum_old_over = romrum_old_over_meter.sum / (romrum_old_over_meter.count + 1e-10)
-    romrum_old_under = romrum_old_under_meter.sum / (romrum_old_under_meter.count + 1e-10)
-
-    # Save the results
-    save_object = {
-        'mIoU': miou.item(),
-        'mDice': mdice.item(),
-        # 'Persello Over': persello_over_list,
-        # 'Persello Under': persello_under_list,
-        'ROM Over': romrum_over_list,
-        'ROM Under': romrum_under_list,
-
-        # 'Persello Old Over': persello_old_over_list,
-        # 'Persello Old Under': persello_old_under_list,
-        'ROM Old Over': romrum_old_over_list,
-        'ROM Old Under': romrum_old_under_list,
-
-        'mIoU time': miou_times,
-        'Persello time': persello_times,
-        'ROM time': romrum_times,
-        'Persello Old time': persello_old_times,
-        'ROM Old time': romrum_old_times,
-    }
-    save_path = os.path.join(args.savedir, 'metrics.json')
+    # Get the metrics
+    save_object = custom_eval.get_results()
+    save_object['type'] = 'all'
+    for i in range(args.classes):
+        save_object_per_class = custom_eval_per_class[i].get_results()
+        save_object_per_class['type'] = 'class_{}'.format(i)
+    save_path = os.path.join(args.savedir, 'metrics.jsonl')
     with open(save_path, 'w') as f:
-        json.dump(save_object, f, indent=4)
+        json.dump(save_object, f)
+        f.write('\n')
+        for i in range(args.classes):
+            save_object_per_class = custom_eval_per_class[i].get_results()
+            save_object_per_class['type'] = 'class_{}'.format(i)
+            json.dump(save_object_per_class, f)
+            f.write('\n')
     print_info_message('Metrics saved to {}'.format(save_path))
 
 def main(args):
@@ -230,11 +188,19 @@ def main(args):
         from model.semantic_segmentation.espnetv2.espnetv2 import espnetv2_seg
         args.classes = seg_classes
         model = espnetv2_seg(args)
+        args.mean = MEAN
+        args.std = STD
     elif args.model == 'bisenetv2':
         from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
         seg_classes = seg_classes - 1 if args.dataset == 'city' else seg_classes # Because the background class is not used in the model
         args.classes = seg_classes
         model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
+        if args.dataset == 'city' or args.dataset == 'edge_mapping':
+            args.mean = (0.3257, 0.3690, 0.3223)
+            args.std = (0.2112, 0.2148, 0.2115)
+        else:
+            args.mean = MEAN
+            args.std = STD
     else:
         print_error_message('{} network not yet supported'.format(args.model))
         exit(-1)
@@ -259,6 +225,8 @@ def main(args):
 
     if not os.path.isdir(args.savedir):
         os.makedirs(args.savedir)
+        os.makedirs(os.path.join(args.savedir, 'target'))
+        os.makedirs(os.path.join(args.savedir, 'pred'))
 
     evaluate(args, model, dataset_loader, device=device)
 

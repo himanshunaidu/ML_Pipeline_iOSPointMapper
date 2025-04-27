@@ -8,6 +8,8 @@ class ROMRUM(object):
     """
     Helps to calculate the Region-wise over-segmentation measure (ROM) and region-wise under-segmentation measure (RUM).
 
+    NOTE: While the function takes in 4D tensors, the first dimension, is supposed to be only 1 for the time being.
+
     Parameters:
     -----------
     num_classes: int
@@ -36,8 +38,8 @@ class ROMRUM(object):
         if target.device == torch.device('cuda'):
             target = target.cpu()
         
-        pred = pred.type(torch.ByteTensor)
-        target = target.type(torch.ByteTensor)
+        pred = pred.type(torch.ByteTensor).clone()
+        target = target.type(torch.ByteTensor).clone()
         
         # shift by 1 so that 255 is 0
         # TODO: Check if this is necessary in the current implementation

@@ -17,6 +17,7 @@ from tqdm import tqdm
 from utilities.print_utils import *
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from utilities.utils import model_parameters, compute_flops
+from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_TRAIN_CMAP
 
 import coremltools as ct
 from executorch.runtime import Runtime, Method
@@ -48,6 +49,23 @@ def preprocess_inputs(self, output, target, is_output_probabilities=True):
 
         return pred, target
 
+def grayscale_tensor_to_rgb_tensor(tensor, cmap):
+    """
+    Convert a grayscale tensor to an RGB tensor using a colormap.
+    :param tensor: Grayscale tensor of shape (C, H, W)
+    :param cmap: Colormap to use for conversion (dict mapping grayscale values to RGB tuples)
+    :return: RGB tensor of shape (3, H, W)
+    """
+    # Create an empty RGB tensor
+    rgb_tensor = torch.zeros((3, tensor.shape[1], tensor.shape[2]), dtype=torch.uint8)
+    # Iterate over the grayscale values and assign the corresponding RGB values
+    for i in range(256):
+        if i in cmap:
+            rgb_tensor[0][tensor[0] == i] = cmap[i][0]
+            rgb_tensor[1][tensor[0] == i] = cmap[i][1]
+            rgb_tensor[2][tensor[0] == i] = cmap[i][2]
+
+    return rgb_tensor
 
 def evaluate(args, model: Method, dataset_loader: torch.utils.data.DataLoader, device):
     im_size = tuple(args.im_size)
@@ -90,6 +108,8 @@ def evaluate(args, model: Method, dataset_loader: torch.utils.data.DataLoader, d
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
         cmap = VOCColormap().get_color_map_voc()
+    elif args.dataset == 'city':
+        cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
 
@@ -158,10 +178,16 @@ def evaluate(args, model: Method, dataset_loader: torch.utils.data.DataLoader, d
             romrum_old_times.append(time.time() - start_time)
 
             # Save the images
-            # target_i_image = F.to_pil_image(target_i.cpu()*10)
-            # target_i_image.save(os.path.join(args.savedir, 'target_{}.png'.format(index)))
-            # img_out_image = F.to_pil_image(img_out_i.cpu()*10)
-            # img_out_image.save(os.path.join(args.savedir, 'pred_{}.png'.format(index)))
+            target_i_image = F.to_pil_image(target_i.cpu()*10)
+            target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
+            target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
+            target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
+            target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
+            img_out_image = F.to_pil_image(img_out_i.cpu()*10)
+            img_out_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index*args.batch_size + i)))
+            img_out_rgb_image = grayscale_tensor_to_rgb_tensor(img_out_i, cmap)
+            img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
+            img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
 
     iou = inter_meter.sum / (union_meter.sum + 1e-10)
     dice = 2 * inter_meter.sum / (inter_meter.sum + union_meter.sum + 1e-10)
@@ -250,6 +276,8 @@ def main(args):
 
     if not os.path.isdir(args.savedir):
         os.makedirs(args.savedir)
+        os.makedirs(os.path.join(args.savedir, 'target'))
+        os.makedirs(os.path.join(args.savedir, 'pred'))
 
     evaluate(args, model, dataset_loader, device='cpu')
 

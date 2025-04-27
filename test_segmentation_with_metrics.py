@@ -1,3 +1,8 @@
+"""
+This experimental script is used to evaluate the performance of a semantic segmentation model on a dataset.
+Only BiSeNetv2 and ESPNetv2 in this script.
+"""
+
 import torch
 import glob
 import os
@@ -11,50 +16,20 @@ from tqdm import tqdm
 from utilities.print_utils import *
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from utilities.utils import model_parameters, compute_flops
+from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_TRAIN_CMAP
 
 from eval.utils import AverageMeter
-from eval.semantic_segmentation.metrics.iou import IOU
-from eval.semantic_segmentation.metrics.dice import Dice
-from eval.semantic_segmentation.metrics.persello import Persello
-from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
-from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, idToClassMap
-from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
+from eval.semantic_segmentation.custom_evaluation import CustomEvaluation
+from eval.semantic_segmentation.metrics.old.persello import cityscapesIdToClassMap
 
-
-def relabel(img):
-    '''
-    This function relabels the predicted labels so that cityscape dataset can process
-    :param img:
-    :return:
-    '''
-    img[img == 19] = 255
-    img[img == 18] = 33
-    img[img == 17] = 32
-    img[img == 16] = 31
-    img[img == 15] = 28
-    img[img == 14] = 27
-    img[img == 13] = 26
-    img[img == 12] = 25
-    img[img == 11] = 24
-    img[img == 10] = 23
-    img[img == 9] = 22
-    img[img == 8] = 21
-    img[img == 7] = 20
-    img[img == 6] = 19
-    img[img == 5] = 17
-    img[img == 4] = 13
-    img[img == 3] = 12
-    img[img == 2] = 11
-    img[img == 1] = 8
-    img[img == 0] = 7
-    img[img == 255] = 0
-    return img
-
-def preprocess_inputs(self, output, target):
+def preprocess_inputs(output, target, is_output_probabilities=True):
         if isinstance(output, tuple):
             output = output[0]
 
-        _, pred = torch.max(output, 1)
+        if is_output_probabilities:
+            _, pred = torch.max(output, 1)
+        else:
+            pred = output
 
         if pred.device == torch.device('cuda'):
             pred = pred.cpu()
@@ -66,58 +41,51 @@ def preprocess_inputs(self, output, target):
 
         return pred, target
 
+def data_transform(input, mean, std):
+    input = F.normalize(input, mean, std)  # normalize the tensor
+    return input
+
+def grayscale_tensor_to_rgb_tensor(tensor, cmap):
+    """
+    Convert a grayscale tensor to an RGB tensor using a colormap.
+    :param tensor: Grayscale tensor of shape (C, H, W)
+    :param cmap: Colormap to use for conversion (dict mapping grayscale values to RGB tuples)
+    :return: RGB tensor of shape (3, H, W)
+    """
+    # Create an empty RGB tensor
+    rgb_tensor = torch.zeros((3, tensor.shape[1], tensor.shape[2]), dtype=torch.uint8)
+    # Iterate over the grayscale values and assign the corresponding RGB values
+    for i in range(256):
+        if i in cmap:
+            rgb_tensor[0][tensor[0] == i] = cmap[i][0]
+            rgb_tensor[1][tensor[0] == i] = cmap[i][1]
+            rgb_tensor[2][tensor[0] == i] = cmap[i][2]
+
+    return rgb_tensor
 
 def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     im_size = tuple(args.im_size)
-
-    losses = AverageMeter()
-    batch_time = AverageMeter()
-    inter_meter = AverageMeter()
-    union_meter = AverageMeter()
-    persello_over_list = []
-    persello_under_list = []
-    persello_over_meter = AverageMeter()
-    persello_under_meter = AverageMeter()
-    romrum_over_list = []
-    romrum_under_list = []
-    romrum_over_meter = AverageMeter()
-    romrum_under_meter = AverageMeter()
-
-    persello_old_over_list = []
-    persello_old_under_list = []
-    persello_old_over_meter = AverageMeter()
-    persello_old_under_meter = AverageMeter()
-    romrum_old_over_list = []
-    romrum_old_under_list = []
-    romrum_old_over_meter = AverageMeter()
-    romrum_old_under_meter = AverageMeter()
-
-    miou_class = IOU(num_classes=args.classes)
-    persello_class = Persello(num_classes=args.classes, max_regions=1024)
-    romrum_class = ROMRUM(num_classes=args.classes, max_regions=1024)
-
-    # To record time taken for each metric
-    start_time = 0
-    miou_times = []
-    persello_times = []
-    romrum_times = []
-    persello_old_times = []
-    romrum_old_times = []
 
     # get color map for pascal dataset
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
         cmap = VOCColormap().get_color_map_voc()
+    elif args.dataset == 'city':
+        cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
+
+    custom_eval = CustomEvaluation(num_classes=args.classes, max_regions=1024, is_output_probabilities=True, 
+                                   idToClassMap=cityscapesIdToClassMap, args=args)
 
     model.eval()
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
     for index, (inputs, target) in tqdm(enumerate(dataset_loader), total=len(dataset_loader)):
         inputs: torch.Tensor = inputs.to(device=device)
-        target: torch.Tensor = target.to(device=device)
+        inputs = data_transform(inputs, args.mean, args.std)
+        target: torch.Tensor = target.to(device=device)#.type(torch.ByteTensor)
 
-        img_out: torch.Tensor = model(inputs)
+        img_out: torch.Tensor = model(inputs)#.type(torch.ByteTensor)
 
         # Get the metrics
         for i in range(img_out.shape[0]):
@@ -125,91 +93,24 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             target_i = target[i].unsqueeze(0)
             img_out_i = img_out[i].unsqueeze(0)
 
-            start_time = time.time()
-            inter, union = miou_class.get_iou(img_out_i, target_i)
-            inter_meter.update(inter)
-            union_meter.update(union)
-            miou_times.append(time.time() - start_time)
+            custom_eval.update(output=img_out_i, target=target_i)
 
-            start_time = time.time()
-            persello_over, persello_under = persello_class.get_persello(img_out_i, target_i)
-            persello_over_list.append(persello_over)
-            persello_under_list.append(persello_under)
-            persello_over_meter.update(persello_over)
-            persello_under_meter.update(persello_under)
-            persello_times.append(time.time() - start_time)
+            # Save the images
+            img_out_processed, target_processed = preprocess_inputs(img_out_i, target_i)
+            target_i = target_i.type(torch.ByteTensor)
+            target_i_image = F.to_pil_image(target_i.cpu()*10)
+            target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
+            target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
+            target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
+            target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
+            img_out_image = F.to_pil_image(img_out_processed.cpu()*10)
+            img_out_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index*args.batch_size + i)))
+            img_out_rgb_image = grayscale_tensor_to_rgb_tensor(img_out_processed, cmap)
+            img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
+            img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
 
-            start_time = time.time()
-            romrum_over, romrum_under = romrum_class.get_rom_rum(img_out_i, target_i)
-            romrum_over_list.append(romrum_over)
-            romrum_under_list.append(romrum_under)
-            romrum_over_meter.update(romrum_over)
-            romrum_under_meter.update(romrum_under)
-            romrum_times.append(time.time() - start_time)
-
-            # Get old persello metrics
-            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
-            img_out_processed, target_processed = img_out_processed.numpy()[0], target_processed.numpy()[0]
-
-            start_time = time.time()
-            persello_old_over, persello_old_under = 0, 0
-            for class_id in idToClassMap.keys():
-                persello_old_over_c, persello_old_under_c = Persello_old(target_processed, img_out_processed, class_id)
-                persello_old_over += persello_old_over_c
-                persello_old_under += persello_old_under_c
-            persello_old_over_list.append(persello_old_over)
-            persello_old_under_list.append(persello_old_under)
-            persello_old_over_meter.update(persello_old_over/len(idToClassMap.keys()))
-            persello_old_under_meter.update(persello_old_under/len(idToClassMap.keys()))
-            persello_old_times.append(time.time() - start_time)
-
-            start_time = time.time()
-            romrum_old_over, romrum_old_under = 0, 0
-            for class_id in idToClassMap.keys():
-                romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_processed, img_out_processed, class_id)
-                romrum_old_over += romrum_old_over_c
-                romrum_old_under += romrum_old_under_c
-            romrum_old_over_list.append(romrum_old_over)
-            romrum_old_under_list.append(romrum_old_under)
-            romrum_old_over_meter.update(math.tanh(romrum_old_over))#/len(idToClassMap.keys()))
-            romrum_old_under_meter.update(math.tanh(romrum_old_under))#/len(idToClassMap.keys()))
-            romrum_old_times.append(time.time() - start_time)
-
-    iou = inter_meter.sum / (union_meter.sum + 1e-10)
-    dice = 2 * inter_meter.sum / (inter_meter.sum + union_meter.sum + 1e-10)
-    miou = iou.mean()
-    mdice = dice.mean()
-
-    persello_over = persello_over_meter.sum / (persello_over_meter.count + 1e-10)
-    persello_under = persello_under_meter.sum / (persello_under_meter.count + 1e-10)
-    romrum_over = romrum_over_meter.sum / (romrum_over_meter.count + 1e-10)
-    romrum_under = romrum_under_meter.sum / (romrum_under_meter.count + 1e-10)
-
-    persello_old_over = persello_old_over_meter.sum / (persello_old_over_meter.count + 1e-10)
-    persello_old_under = persello_old_under_meter.sum / (persello_old_under_meter.count + 1e-10)
-    romrum_old_over = romrum_old_over_meter.sum / (romrum_old_over_meter.count + 1e-10)
-    romrum_old_under = romrum_old_under_meter.sum / (romrum_old_under_meter.count + 1e-10)
-
-    # Save the results
-    save_object = {
-        'mIoU': miou.item(),
-        'mDice': mdice.item(),
-        # 'Persello Over': persello_over_list,
-        # 'Persello Under': persello_under_list,
-        'ROM Over': romrum_over_list,
-        'ROM Under': romrum_under_list,
-
-        # 'Persello Old Over': persello_old_over_list,
-        # 'Persello Old Under': persello_old_under_list,
-        'ROM Old Over': romrum_old_over_list,
-        'ROM Old Under': romrum_old_under_list,
-
-        'mIoU time': miou_times,
-        'Persello time': persello_times,
-        'ROM time': romrum_times,
-        'Persello Old time': persello_old_times,
-        'ROM Old time': romrum_old_times,
-    }
+    # Get the metrics
+    save_object = custom_eval.get_results()
     save_path = os.path.join(args.savedir, 'metrics.json')
     with open(save_path, 'w') as f:
         json.dump(save_object, f, indent=4)
@@ -222,24 +123,24 @@ def main(args):
         dataset = CityscapesSegmentationTest(root=args.data_path, size=args.im_size, scale=args.s,
                                              coarse=False, split=args.split)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
-    # elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-    #     image_path = os.path.join(args.data_path, "rgb", "*.png")
-    #     image_list = glob.glob(image_path)
-    #     from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
-    #     seg_classes = len(EDGE_MAPPING_CLASS_LIST)
-    # elif args.dataset == 'pascal':
-    #     from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
-    #     seg_classes = len(VOC_CLASS_LIST)
-    #     data_file = os.path.join(args.data_path, 'VOC2012', 'list', '{}.txt'.format(args.split))
-    #     if not os.path.isfile(data_file):
-    #         print_error_message('{} file does not exist'.format(data_file))
-    #     image_list = []
-    #     with open(data_file, 'r') as lines:
-    #         for line in lines:
-    #             rgb_img_loc = '{}/{}/{}'.format(args.data_path, 'VOC2012', line.split()[0])
-    #             if not os.path.isfile(rgb_img_loc):
-    #                 print_error_message('{} image file does not exist'.format(rgb_img_loc))
-    #             image_list.append(rgb_img_loc)
+    elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
+        image_path = os.path.join(args.data_path, "rgb", "*.png")
+        image_list = glob.glob(image_path)
+        from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+        seg_classes = len(EDGE_MAPPING_CLASS_LIST)
+    elif args.dataset == 'pascal':
+        from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
+        seg_classes = len(VOC_CLASS_LIST)
+        data_file = os.path.join(args.data_path, 'VOC2012', 'list', '{}.txt'.format(args.split))
+        if not os.path.isfile(data_file):
+            print_error_message('{} file does not exist'.format(data_file))
+        image_list = []
+        with open(data_file, 'r') as lines:
+            for line in lines:
+                rgb_img_loc = '{}/{}/{}'.format(args.data_path, 'VOC2012', line.split()[0])
+                if not os.path.isfile(rgb_img_loc):
+                    print_error_message('{} image file does not exist'.format(rgb_img_loc))
+                image_list.append(rgb_img_loc)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
         exit(-1)
@@ -255,6 +156,19 @@ def main(args):
         from model.semantic_segmentation.espnetv2.espnetv2 import espnetv2_seg
         args.classes = seg_classes
         model = espnetv2_seg(args)
+        args.mean = MEAN
+        args.std = STD
+    elif args.model == 'bisenetv2':
+        from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
+        seg_classes = seg_classes - 1 if args.dataset == 'city' else seg_classes # Because the background class is not used in the model
+        args.classes = seg_classes
+        model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
+        if args.dataset == 'city' or args.dataset == 'edge_mapping':
+            args.mean = (0.3257, 0.3690, 0.3223)
+            args.std = (0.2112, 0.2148, 0.2115)
+        else:
+            args.mean = MEAN
+            args.std = STD
     else:
         print_error_message('{} network not yet supported'.format(args.model))
         exit(-1)
@@ -268,7 +182,7 @@ def main(args):
     if args.weights_test:
         print_info_message('Loading model weights')
         weight_dict = torch.load(args.weights_test, map_location=torch.device('cpu'))
-        model.load_state_dict(weight_dict)
+        model.load_state_dict(weight_dict, strict=False if args.model == 'bisenetv2' else True)
         print_info_message('Weight loaded successfully')
     else:
         print_error_message('weight file does not exist or not specified. Please check: {}', format(args.weights_test))
@@ -279,6 +193,8 @@ def main(args):
 
     if not os.path.isdir(args.savedir):
         os.makedirs(args.savedir)
+        os.makedirs(os.path.join(args.savedir, 'target'))
+        os.makedirs(os.path.join(args.savedir, 'pred'))
 
     evaluate(args, model, dataset_loader, device=device)
 
@@ -290,7 +206,7 @@ if __name__ == '__main__':
     # general details
     parser.add_argument('--workers', type=int, default=4, help='number of data loading workers')
     # mdoel details
-    parser.add_argument('--model', default="espnetv2", choices=segmentation_models, help='Model name')
+    parser.add_argument('--model', default="bisenetv2", choices=segmentation_models, help='Model name')
     parser.add_argument('--weights-test', default='', help='Pretrained weights directory.')
     parser.add_argument('--s', default=2.0, type=float, help='scale')
     # dataset details
@@ -310,16 +226,30 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not args.weights_test:
-        from model.semantic_segmentation.espnetv2.weight_locations import model_weight_map
+        if args.model == 'espnetv2':
+            from model.semantic_segmentation.espnetv2.weight_locations import model_weight_map
 
-        model_key = '{}_{}'.format(args.model, args.s)
-        dataset_key = '{}_{}x{}'.format(args.dataset, args.im_size[0], args.im_size[1])
-        assert model_key in model_weight_map.keys(), '{} does not exist'.format(model_key)
-        assert dataset_key in model_weight_map[model_key].keys(), '{} does not exist'.format(dataset_key)
-        args.weights_test = model_weight_map[model_key][dataset_key]['weights']
-        if not os.path.isfile(args.weights_test):
-            print_error_message('weight file does not exist: {}'.format(args.weights_test))
+            model_key = '{}_{}'.format(args.model, args.s)
+            dataset_key = '{}_{}x{}'.format(args.dataset, args.im_size[0], args.im_size[1])
+            assert model_key in model_weight_map.keys(), '{} does not exist'.format(model_key)
+            assert dataset_key in model_weight_map[model_key].keys(), '{} does not exist'.format(dataset_key)
+            args.weights_test = model_weight_map[model_key][dataset_key]['weights']
+            if not os.path.isfile(args.weights_test):
+                print_error_message('weight file does not exist: {}'.format(args.weights_test))
 
+        elif args.model == 'bisenetv2':
+            from model.semantic_segmentation.bisenetv2.weight_locations import model_weight_map
+
+            model_key = '{}'.format(args.model)
+            assert model_key in model_weight_map.keys(), '{} does not exist'.format(model_key)
+            args.weights_test = model_weight_map[model_key]['weights']
+            if not os.path.isfile(args.weights_test):
+                print_error_message('weight file does not exist: {}'.format(args.weights_test))
+
+        else:
+            print_error_message('{} network not yet supported'.format(args.model))
+            exit(-1)
+    
     # set-up results path
     if args.dataset == 'city':
         args.savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
