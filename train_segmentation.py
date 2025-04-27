@@ -1,3 +1,9 @@
+"""
+This script is for reference only. It is not recommended to use it for training.
+The training should be done in the original repositories, and then the model should be brought to this repository for conversion and inference.
+
+This specific script is used to train the ESPNetV2 model for semantic segmentation.
+"""
 import argparse
 import os
 import torch
