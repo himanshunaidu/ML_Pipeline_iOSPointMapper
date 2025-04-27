@@ -3,6 +3,27 @@ import torch
 import numpy as np
 from enum import Enum
 
+class TimeMeter(object):
+
+    def __init__(self, max_iter):
+        self.iter = 0
+        self.max_iter = max_iter
+        self.st = time.time()
+        self.global_st = self.st
+        self.curr = self.st
+
+    def update(self):
+        self.iter += 1
+
+    def get(self):
+        self.curr = time.time()
+        interv = self.curr - self.st
+        global_interv = self.curr - self.global_st
+        eta = int((self.max_iter-self.iter) * (global_interv / (self.iter+1)))
+        eta = str(datetime.timedelta(seconds=eta))
+        self.st = self.curr
+        return interv, eta
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
     def __init__(self):
