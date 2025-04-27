@@ -22,6 +22,7 @@ from torch.utils.data import DataLoader
 import torch.cuda.amp as amp
 
 from config import set_cfg_from_file
+from data_loader.semantic_segmentation.sampler import RepeatedDistSampler
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from train.semantic_segmentation.loss_functions.ohem_ce_loss import OhemCELoss
 from train.lr_scheduler_2 import WarmupPolyLrScheduler
@@ -116,6 +117,61 @@ def set_model_dist(net):
         output_device=local_rank
         )
     return net
+
+def get_data_loader(cfg, mode='train'):
+    if mode == 'train':
+        if cfg.model == 'bisenetv2':
+            from transforms.semantic_segmentation.data_transform_groups \
+                import TransformationTrainBiSeNetv2 as TransformationTrain
+        else:
+            from transforms.semantic_segmentation.data_transform_groups import TransformationTrain
+        trans_func = TransformationTrain(cfg.scales, cfg.cropsize)
+        batchsize = cfg.ims_per_gpu
+        annpath = cfg.train_im_anns
+        shuffle = True
+        drop_last = True
+    elif mode == 'val':
+        if cfg.model == 'bisenetv2':
+            from transforms.semantic_segmentation.data_transform_groups \
+                import TransformationValBiSeNetv2 as TransformationVal
+        else:
+            from transforms.semantic_segmentation.data_transform_groups import TransformationVal
+        trans_func = TransformationVal()
+        batchsize = cfg.eval_ims_per_gpu
+        annpath = cfg.val_im_anns
+        shuffle = False
+        drop_last = False
+
+    ds = eval(cfg.dataset)(cfg.im_root, annpath, trans_func=trans_func, mode=mode)
+
+    if dist.is_initialized():
+        assert dist.is_available(), "dist should be initialzed"
+        if mode == 'train':
+            assert not cfg.max_iter is None
+            n_train_imgs = cfg.ims_per_gpu * dist.get_world_size() * cfg.max_iter
+            sampler = RepeatedDistSampler(ds, n_train_imgs, shuffle=shuffle)
+        else:
+            sampler = torch.utils.data.DistributedSampler(
+                ds, shuffle=shuffle)
+        batchsampler = torch.utils.data.BatchSampler(
+            sampler, batchsize, drop_last=drop_last
+        )
+        dl = DataLoader(
+            ds,
+            batch_sampler=batchsampler,
+            num_workers=4,
+            pin_memory=True,
+        )
+    else:
+        dl = DataLoader(
+            ds,
+            batch_size=batchsize,
+            shuffle=shuffle,
+            drop_last=drop_last,
+            num_workers=4,
+            pin_memory=True,
+        )
+    return dl
 
 def set_meters():
     time_meter = TimeMeter(cfg.max_iter)

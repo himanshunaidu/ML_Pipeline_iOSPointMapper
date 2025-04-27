@@ -4,7 +4,7 @@ from PIL import Image
 
 from transforms.semantic_segmentation.data_transforms import *
 
-class TransformationTrainESPNetv2(object):
+class TransformationTrain(object):
     def __init__(self, scale, size, *,
                  mean=MEAN, std=STD):
         self.train_transforms = Compose(
@@ -20,7 +20,7 @@ class TransformationTrainESPNetv2(object):
         rgb_img, label_img = self.train_transforms(rgb_img, label_img)
         return rgb_img, label_img
     
-class TransformationValESPNetv2(object):
+class TransformationVal(object):
     def __init__(self, size, *, 
                  mean=MEAN, std=STD):
         self.val_transforms = Compose(
