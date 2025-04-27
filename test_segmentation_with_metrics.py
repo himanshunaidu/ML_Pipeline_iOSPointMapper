@@ -22,7 +22,7 @@ from eval.utils import AverageMeter
 from eval.semantic_segmentation.custom_evaluation import CustomEvaluation
 from eval.semantic_segmentation.metrics.old.persello import cityscapesIdToClassMap
 
-def preprocess_inputs(self, output, target, is_output_probabilities=True):
+def preprocess_inputs(output, target, is_output_probabilities=True):
         if isinstance(output, tuple):
             output = output[0]
 
@@ -96,7 +96,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             custom_eval.update(output=img_out_i, target=target_i)
 
             # Save the images
-            img_out_processed, target_processed = preprocess_inputs(model, img_out_i, target_i)
+            img_out_processed, target_processed = preprocess_inputs(img_out_i, target_i)
             target_i = target_i.type(torch.ByteTensor)
             target_i_image = F.to_pil_image(target_i.cpu()*10)
             target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
@@ -147,7 +147,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(10))
+    # dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
