@@ -31,6 +31,9 @@ rm -rf val2017.zip
 echo "COCO data downloading over!!"
 
 cd ..
+
+mkdir annotations
+cd annotations
 echo "Downloading annotations"
 wget -c http://calvin.inf.ed.ac.uk/wp-content/uploads/data/cocostuffdataset/stuffthingmaps_trainval2017.zip
 #wget -c http://images.cocodataset.org/annotations/annotations_trainval2017.zip

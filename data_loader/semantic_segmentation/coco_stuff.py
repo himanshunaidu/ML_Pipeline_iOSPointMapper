@@ -121,6 +121,77 @@ class COCOStuffSegmentation(data.Dataset):
 
         return Image.fromarray(new_mask)
 
+class COCOStuffSegmentationVanilla(data.Dataset):
+    """
+    COCO Stuff Segmentation Dataset without the custom data processing.
+    """
+    def __init__(self, root_dir, split='train', year='2017', is_training=True, scale=(0.5, 1.0), crop_size=(513, 513)):
+        super(COCOStuffSegmentationVanilla, self).__init__()
+        self.img_dir = os.path.join(root_dir, 'images/{}{}'.format(split, year))
+        self.annot_dir = os.path.join(root_dir, 'annotations/{}{}'.format(split, year))
+
+        image_list = glob.glob(self.img_dir + os.sep + '*.jpg')
+        annotation_list = glob.glob(self.annot_dir + os.sep + '*.png')
+
+        assert len(image_list) == len(annotation_list)
+
+        self.image_list = image_list
+        self.annotation_list = annotation_list
+
+        self.split = split
+
+        if isinstance(crop_size, tuple):
+            self.crop_size = crop_size
+        else:
+            self.crop_size = (crop_size, crop_size)
+
+        if isinstance(scale, tuple):
+            self.scale = scale
+        else:
+            self.scale = (scale, scale)
+
+        self.train_transforms, self.val_transforms = self.transforms()
+        class_numbers = list(cocoStuff_continuous_dict.values())
+        class_numbers = np.array(class_numbers)
+        class_numbers = np.unique(class_numbers)
+        self.num_classes = len(class_numbers)
+        self.is_training = is_training
+
+    def transforms(self):
+        train_transforms = Compose(
+            [
+                RandomFlip(),
+                RandomScale(scale=self.scale),
+                RandomCrop(crop_size=self.crop_size),
+                Normalize()
+            ]
+        )
+        val_transforms = Compose(
+            [
+                Resize(size=self.crop_size),
+                Normalize()
+            ]
+        )
+        return train_transforms, val_transforms
+
+    def __len__(self):
+        return len(self.image_list)
+
+    def __getitem__(self, index):
+        rgb_img_loc = self.image_list[index]
+        annotation_loc = rgb_img_loc.replace('images', 'annotations')
+        annotation_loc = annotation_loc.replace('.jpg', '.png')
+        rgb_img = Image.open(rgb_img_loc).convert('RGB')
+        label_img = Image.open(annotation_loc)
+
+        label_img = np.array(label_img)
+        
+        if self.is_training:
+            rgb_img, label_img = self.train_transforms(rgb_img, label_img)
+        else:
+            rgb_img, label_img = self.val_transforms(rgb_img, label_img)
+
+        return rgb_img, label_img
 
 if __name__ == "__main__":
     root_dir = '../../datasets/coco_stuff/coco'
