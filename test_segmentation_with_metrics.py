@@ -100,14 +100,16 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             target_i = target_i.type(torch.ByteTensor)
             target_i_image = F.to_pil_image(target_i.cpu()*10)
             target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
-            target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
-            target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
-            target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
+            if cmap is not None:
+                target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
+                target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
+                target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
             img_out_image = F.to_pil_image(img_out_processed.cpu()*10)
             img_out_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index*args.batch_size + i)))
-            img_out_rgb_image = grayscale_tensor_to_rgb_tensor(img_out_processed, cmap)
-            img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
-            img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
+            if cmap is not None:
+                img_out_rgb_image = grayscale_tensor_to_rgb_tensor(img_out_processed, cmap)
+                img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
+                img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
 
     # Get the metrics
     save_object = custom_eval.get_results()
@@ -141,13 +143,18 @@ def main(args):
                 if not os.path.isfile(rgb_img_loc):
                     print_error_message('{} image file does not exist'.format(rgb_img_loc))
                 image_list.append(rgb_img_loc)
+    elif args.dataset == 'coco_stuff':
+        from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentationVanilla
+        dataset = COCOStuffSegmentationVanilla(root_dir=args.data_path, split=args.split, is_training=False,
+                                         scale=(args.s, args.s), crop_size=args.im_size)
+        seg_classes = 171 # Hardcoded for coco stuff dataset for now
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
         exit(-1)
 
 
     # Get a subset of the dataset
-    # dataset = torch.utils.data.Subset(dataset, range(10))
+    dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
@@ -163,9 +170,13 @@ def main(args):
         seg_classes = seg_classes - 1 if args.dataset == 'city' else seg_classes # Because the background class is not used in the model
         args.classes = seg_classes
         model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
+        # Eventually, the following mean and std related info should be moved to global config
         if args.dataset == 'city' or args.dataset == 'edge_mapping':
             args.mean = (0.3257, 0.3690, 0.3223)
             args.std = (0.2112, 0.2148, 0.2115)
+        elif args.dataset == 'coco_stuff':
+            args.mean = (0.46962251, 0.4464104,  0.40718787)
+            args.std = (0.27469736, 0.27012361, 0.28515933)
         else:
             args.mean = MEAN
             args.std = STD
@@ -257,6 +268,8 @@ if __name__ == '__main__':
         args.savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
         args.savedir = 'results_test/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
+    elif args.dataset == 'coco_stuff':
+        args.savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
 

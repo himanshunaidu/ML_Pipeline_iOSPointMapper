@@ -151,10 +151,6 @@ class COCOStuffSegmentationVanilla(data.Dataset):
             self.scale = (scale, scale)
 
         self.train_transforms, self.val_transforms = self.transforms()
-        class_numbers = list(cocoStuff_continuous_dict.values())
-        class_numbers = np.array(class_numbers)
-        class_numbers = np.unique(class_numbers)
-        self.num_classes = len(class_numbers)
         self.is_training = is_training
 
     def transforms(self):
@@ -184,8 +180,6 @@ class COCOStuffSegmentationVanilla(data.Dataset):
         rgb_img = Image.open(rgb_img_loc).convert('RGB')
         label_img = Image.open(annotation_loc)
 
-        label_img = np.array(label_img)
-        
         if self.is_training:
             rgb_img, label_img = self.train_transforms(rgb_img, label_img)
         else:
@@ -196,8 +190,8 @@ class COCOStuffSegmentationVanilla(data.Dataset):
 if __name__ == "__main__":
     root_dir = '../../datasets/coco_stuff/coco'
 
-    coco = COCOStuffSegmentation(root_dir, split='val', year=2017)
-    img, mask = coco.__getitem__(1)
+    coco = COCOStuffSegmentationVanilla(root_dir, split='val', year=2017)
+    img, mask = coco.__getitem__(5)
     print(np.unique(np.array(mask)))
     img.save('rgb.png')
     mask.save('mask.png')
