@@ -232,7 +232,8 @@ def evaluate(args, model: Method, dataset_loader: torch.utils.data.DataLoader, d
 def main(args):
     # read all the images in the folder
     if args.dataset == 'city':
-        from data_loader.semantic_segmentation.cityscapes import CityscapesSegmentationTest, CITYSCAPE_CLASS_LIST
+        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST
+        from data_loader.semantic_segmentation.backup import CityscapesSegmentationTest
         dataset = CityscapesSegmentationTest(root=args.data_path, size=args.im_size, scale=args.s,
                                              coarse=False, split=args.split)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
