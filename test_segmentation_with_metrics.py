@@ -144,8 +144,8 @@ def main(args):
                     print_error_message('{} image file does not exist'.format(rgb_img_loc))
                 image_list.append(rgb_img_loc)
     elif args.dataset == 'coco_stuff':
-        from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentationVanilla
-        dataset = COCOStuffSegmentationVanilla(root_dir=args.data_path, split=args.split, is_training=False,
+        from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentationBiSeNetv2
+        dataset = COCOStuffSegmentationBiSeNetv2(root_dir=args.data_path, split=args.split, is_training=False,
                                          scale=(args.s, args.s), crop_size=args.im_size)
         seg_classes = 171 # Hardcoded for coco stuff dataset for now
     else:
@@ -154,7 +154,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    dataset = torch.utils.data.Subset(dataset, range(10))
+    # dataset = torch.utils.data.Subset(dataset, range(100))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))

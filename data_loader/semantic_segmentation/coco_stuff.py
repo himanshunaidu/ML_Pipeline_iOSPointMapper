@@ -36,7 +36,8 @@ cocoStuff_continuous_dict = {0:0, 1:1, 2:2, 3:3, 4:4, 6:5, 7:6, 8:7,
 class COCOStuffSegmentation(data.Dataset):
     # these are the same as the PASCAL VOC dataset
 
-    def __init__(self, root_dir, split='train', year='2017', is_training=True, scale=(0.5, 1.0), crop_size=(513, 513)):
+    def __init__(self, root_dir, split='train', year='2017', is_training=True, scale=(0.5, 1.0), crop_size=(513, 513),
+                 ignore_idx=255):
         super(COCOStuffSegmentation, self).__init__()
         self.img_dir = os.path.join(root_dir, 'images/{}{}'.format(split, year))
         self.annot_dir = os.path.join(root_dir, 'annotations/{}{}'.format(split, year))
@@ -121,12 +122,12 @@ class COCOStuffSegmentation(data.Dataset):
 
         return Image.fromarray(new_mask)
 
-class COCOStuffSegmentationVanilla(data.Dataset):
+class COCOStuffSegmentationBiSeNetv2(data.Dataset):
     """
-    COCO Stuff Segmentation Dataset without the custom data processing.
+    COCO Stuff Segmentation Dataset with custom processing for BiSeNetv2 original implementation.
     """
     def __init__(self, root_dir, split='train', year='2017', is_training=True, scale=(0.5, 1.0), crop_size=(513, 513)):
-        super(COCOStuffSegmentationVanilla, self).__init__()
+        super(COCOStuffSegmentationBiSeNetv2, self).__init__()
         self.img_dir = os.path.join(root_dir, 'images/{}{}'.format(split, year))
         self.annot_dir = os.path.join(root_dir, 'annotations/{}{}'.format(split, year))
 
@@ -152,6 +153,13 @@ class COCOStuffSegmentationVanilla(data.Dataset):
 
         self.train_transforms, self.val_transforms = self.transforms()
         self.is_training = is_training
+
+        ## label mapping, remove non-existing labels
+        missing = [11, 25, 28, 29, 44, 65, 67, 68, 70, 82, 90]
+        remain = [ind for ind in range(182) if not ind in missing]
+        self.lb_map = np.arange(256)
+        for ind in remain:
+            self.lb_map[ind] = remain.index(ind)
 
     def transforms(self):
         train_transforms = Compose(
@@ -180,18 +188,30 @@ class COCOStuffSegmentationVanilla(data.Dataset):
         rgb_img = Image.open(rgb_img_loc).convert('RGB')
         label_img = Image.open(annotation_loc)
 
+        label_img = self._process_mask(label_img)
+
         if self.is_training:
             rgb_img, label_img = self.train_transforms(rgb_img, label_img)
         else:
             rgb_img, label_img = self.val_transforms(rgb_img, label_img)
 
         return rgb_img, label_img
+    
+    def _process_mask(self, mask):
+        mask = np.array(mask, dtype=np.uint8)
+
+        # Use lb_map to map the labels
+        new_mask = np.zeros_like(mask)
+        for index, value in enumerate(self.lb_map):
+            new_mask[mask == index] = value
+        mask = new_mask
+
+        return Image.fromarray(mask)
 
 if __name__ == "__main__":
     root_dir = '../../datasets/coco_stuff/coco'
 
-    coco = COCOStuffSegmentationVanilla(root_dir, split='val', year=2017)
+    coco = COCOStuffSegmentationBiSeNetv2(root_dir, split='val', year=2017)
     img, mask = coco.__getitem__(5)
-    print(np.unique(np.array(mask)))
     img.save('rgb.png')
     mask.save('mask.png')
