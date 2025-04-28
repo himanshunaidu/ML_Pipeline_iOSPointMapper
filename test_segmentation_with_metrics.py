@@ -144,8 +144,8 @@ def main(args):
                     print_error_message('{} image file does not exist'.format(rgb_img_loc))
                 image_list.append(rgb_img_loc)
     elif args.dataset == 'coco_stuff':
-        from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentationBiSeNetv2
-        dataset = COCOStuffSegmentationBiSeNetv2(root_dir=args.data_path, split=args.split, is_training=False,
+        from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentation
+        dataset = COCOStuffSegmentation(root_dir=args.data_path, split=args.split, is_training=False,
                                          scale=(args.s, args.s), crop_size=args.im_size)
         seg_classes = 171 # Hardcoded for coco stuff dataset for now
     else:
