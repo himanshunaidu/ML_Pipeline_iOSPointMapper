@@ -15,6 +15,7 @@ import torchvision
 import json
 import cv2
 from PIL import Image
+from utilities.print_utils import *
 
 from model.semantic_segmentation.espnetv2.espnetv2 import espnetv2_seg
 from transforms.semantic_segmentation.data_transforms import ToTensor
@@ -26,7 +27,7 @@ class WrappedESPNetv2(nn.Module):
     def __init__(self, args):
         super(WrappedESPNetv2, self).__init__()
         self.model = espnetv2_seg(args=args)
-        self.model.load_state_dict(torch.load(args.weight_path, map_location=torch.device('cuda')), strict=False)
+        self.model.load_state_dict(torch.load(args.weight_path, map_location=torch.device('cpu')), strict=False)
         self.model.eval()
 
     def forward(self, x):
@@ -44,11 +45,11 @@ if __name__ == '__main__':
     # general details
     parser.add_argument('--workers', type=int, default=4, help='number of data loading workers')
     # mdoel details
-    parser.add_argument('--model', default="bisenetv2", choices=segmentation_models, help='Model name')
-    parser.add_argument('--weights-test', default='', help='Pretrained weights directory.')
+    parser.add_argument('--model', default="espnetv2", choices=segmentation_models, help='Model name')
+    parser.add_argument('--weight-path', default='', help='Pretrained weights directory.') # model/semantic_segmentation/model_zoo/espnetv2/espnetv2_s_2.0_city_512x256.pth
     parser.add_argument('--s', default=2.0, type=float, help='scale')
     # dataset details
-    parser.add_argument('--data-path', default="", help='Data directory')
+    parser.add_argument('--data-path', default="", help='Data directory') # datasets/cityscapes
     parser.add_argument('--dataset', default='city', choices=segmentation_datasets, help='Dataset name')
     # input details
     parser.add_argument('--im-size', type=int, nargs="+", default=[512, 256], help='Image size for testing (W x H)')
@@ -64,6 +65,22 @@ if __name__ == '__main__':
             default='./coreml/semantic_segmentation/model_zoo/')
     parser.add_argument('--img-path', dest='img_path', type=str, default='./datasets/custom_images/test.jpg',)
     args = parser.parse_args()
+
+    args.weights = ''
+
+    if args.dataset == 'city':
+        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST
+        seg_classes = len(CITYSCAPE_CLASS_LIST)
+    elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
+        from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+        seg_classes = len(EDGE_MAPPING_CLASS_LIST)
+    elif args.dataset == 'pascal':
+        from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
+        seg_classes = len(VOC_CLASS_LIST)
+    else:
+        print_error_message('{} dataset not yet supported'.format(args.dataset))
+        exit(-1)
+    args.classes = seg_classes
 
     # Prepare data
     to_tensor = ToTensor(
@@ -82,3 +99,24 @@ if __name__ == '__main__':
     im, label = to_tensor(rgb_img=im, label_img=empty_label)
     im = im.unsqueeze(0)
     
+    # Prepare model
+    torch_model = WrappedESPNetv2(args=args)
+    torch_model = torch_model.to('cpu')
+    torch_model.eval()
+    # torch_model(im)
+    # torch_model = torch_model.to('mps')
+    # exit()
+    traced_model = torch.jit.trace(torch_model, im)
+
+    ml_model = ct.convert(
+        traced_model,
+        inputs=[ct.ImageType(name="input", shape=im.shape, scale=scale, bias=bias)],
+        outputs=[ct.ImageType(name="output", color_layout=ct.colorlayout.GRAYSCALE)],
+        # compute_precision=ct.precision.FLOAT16
+        # minimum_deployment_target=ct.target.iOS13,
+        # compute_units=ct.ComputeUnit.CPU_AND_GPU
+    )
+
+    ml_model_path = osp.join(args.out_pth, 'espnetv2_{}_{}_{}_{}.mlpackage'.format(args.dataset, args.num_classes, args.im_size[0], args.im_size[1]))
+    ml_model.save(ml_model_path)
+    print(f"Saved the model to {ml_model_path}")
