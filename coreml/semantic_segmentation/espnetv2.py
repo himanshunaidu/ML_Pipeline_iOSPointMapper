@@ -43,9 +43,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     # general details
-    parser.add_argument('--workers', type=int, default=4, help='number of data loading workers')
-    # mdoel details
-    parser.add_argument('--model', default="espnetv2", choices=segmentation_models, help='Model name')
+    # parser.add_argument('--workers', type=int, default=4, help='number of data loading workers')
+    # mdoel details (only espnetv2 is supported in this script)
+    # parser.add_argument('--model', default="espnetv2", choices=segmentation_models, help='Model name')
     parser.add_argument('--weight-path', default='', help='Pretrained weights directory.') # model/semantic_segmentation/model_zoo/espnetv2/espnetv2_s_2.0_city_512x256.pth
     parser.add_argument('--s', default=2.0, type=float, help='scale')
     # dataset details
