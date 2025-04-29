@@ -5,7 +5,8 @@ import glob
 if __name__ == '__main__':
     import sys
     sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose
+from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose, ToTensor
+from transforms.semantic_segmentation.data_transforms import MEAN, STD
 import numpy as np
 
 cocoStuff_dict = {0:'background', 1:'person', 2:'bicycle', 3:'car', 4:'motorcycle', 6:'bus', 7:'train', 8:'truck',
@@ -32,12 +33,13 @@ cocoStuff_continuous_dict = {0:0, 1:1, 2:2, 3:3, 4:4, 6:5, 7:6, 8:7,
                   173:50, 174:50, 175:50, 176:50, 177:50, 178:51, 182:52 }
 
 
-
 class COCOStuffSegmentation(data.Dataset):
     # these are the same as the PASCAL VOC dataset
 
-    def __init__(self, root_dir, split='train', year='2017', is_training=True, scale=(0.5, 1.0), crop_size=(513, 513),
-                 ignore_idx=255):
+    def __init__(self, root_dir, split='train', year='2017', is_training=True, scale=(0.5, 1.0), 
+                 crop_size=(513, 513), ignore_idx=255, 
+                 *, mean=MEAN, std=STD,
+                 is_custom=False, custom_mapping_dict=None):
         super(COCOStuffSegmentation, self).__init__()
         self.img_dir = os.path.join(root_dir, 'images/{}{}'.format(split, year))
         self.annot_dir = os.path.join(root_dir, 'annotations/{}{}'.format(split, year))
@@ -62,6 +64,9 @@ class COCOStuffSegmentation(data.Dataset):
         else:
             self.scale = (scale, scale)
 
+        self.mean = mean
+        self.std = std
+
         self.train_transforms, self.val_transforms = self.transforms()
         class_numbers = list(cocoStuff_continuous_dict.values())
         class_numbers = np.array(class_numbers)
@@ -69,19 +74,25 @@ class COCOStuffSegmentation(data.Dataset):
         self.num_classes = len(class_numbers)
         self.is_training = is_training
 
+        self.is_custom = is_custom
+        assert not is_custom or custom_mapping_dict is not None, "Custom mapping dictionary should be provided when is_custom is True."
+        self.custom_mapping_dict = custom_mapping_dict
+
     def transforms(self):
         train_transforms = Compose(
             [
                 RandomFlip(),
                 RandomScale(scale=self.scale),
                 RandomCrop(crop_size=self.crop_size),
-                Normalize()
+                # Normalize()
+                ToTensor(mean=self.mean, std=self.std)
             ]
         )
         val_transforms = Compose(
             [
                 Resize(size=self.crop_size),
-                Normalize()
+                # Normalize()
+                ToTensor(mean=self.mean, std=self.std)
             ]
         )
         return train_transforms, val_transforms
@@ -109,10 +120,11 @@ class COCOStuffSegmentation(data.Dataset):
         mask = np.array(mask, dtype=np.uint8)
 
         ##################  For tuning on our custom data
-        new_mask = np.zeros_like(mask)
-        for k, v in cos2cocoStuff_dict.items():
-            new_mask[mask == k] = v
-        mask = new_mask
+        if self.is_custom:
+            new_mask = np.zeros_like(mask)
+            for k, v in self.custom_mapping_dict.items():
+                new_mask[mask == k] = v
+            mask = new_mask
         #################
 
         # mask = mask + 1 # shift by 1 so that 255 becomes 0 and 0-becomes 1, for coco stuff dataset
@@ -126,6 +138,13 @@ if __name__ == "__main__":
     root_dir = '../../datasets/coco_stuff/coco'
 
     coco = COCOStuffSegmentation(root_dir, split='val', year=2017)
-    img, mask = coco.__getitem__(5)
-    img.save('rgb.png')
-    mask.save('mask.png')
+    # img, mask = coco.__getitem__(5)
+    # img.save('rgb.png')
+    # mask.save('mask.png')
+    unique_mask_values = set()
+    for i in range(1000):
+        img, mask = coco.__getitem__(i)
+        mask = np.array(mask)
+        unique_mask_values.update(np.unique(mask))
+    print(unique_mask_values)
+    print(len(unique_mask_values))
