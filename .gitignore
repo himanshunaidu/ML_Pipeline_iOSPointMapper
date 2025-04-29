@@ -1,5 +1,6 @@
 # Package Specific
 command
+analyze.py
 
 ## Data Loader
 /data_loader/dump/
