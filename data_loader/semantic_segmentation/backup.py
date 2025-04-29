@@ -13,6 +13,11 @@ from transforms.semantic_segmentation.data_transforms import \
     RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose, Identity
 import numpy as np
 
+"""
+TODO: Elimiate the usage of this class.
+Currently, it is used extensively by the testing scripts. 
+We can simply replace this with the CityscapesSegmentation class by providing custom mean and std.
+"""
 class CityscapesSegmentationTest(data.Dataset):
 
     def __init__(self, root, scale=(0.5, 2.0), size=(1024, 512), ignore_idx=255, coarse=True, split = 'train'):

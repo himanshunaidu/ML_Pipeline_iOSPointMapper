@@ -8,7 +8,7 @@ if __name__ == '__main__':
 from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose
 import numpy as np
 
-cocoStuff_dict = {0:'backgroud', 1:'person', 2:'bicycle', 3:'car', 4:'motorcycle', 6:'bus', 7:'train', 8:'truck',
+cocoStuff_dict = {0:'background', 1:'person', 2:'bicycle', 3:'car', 4:'motorcycle', 6:'bus', 7:'train', 8:'truck',
                   10:'traffic light', 11:'fire hydrant', 12:'street sign', 13:'stop sign', 14:'parking meter',
                   15:'bench', 33: 'suitcase', 41:'skateboard', 64:'potted plant', 92:'banner', 94:'branch',
                   96:'building-other', 97:'bush', 99:'cage', 100:'cardboard', 111:'dirt', 113:'fence', 
@@ -121,3 +121,11 @@ class COCOStuffSegmentation(data.Dataset):
             new_mask[mask == k] = v
 
         return Image.fromarray(new_mask)
+
+if __name__ == "__main__":
+    root_dir = '../../datasets/coco_stuff/coco'
+
+    coco = COCOStuffSegmentation(root_dir, split='val', year=2017)
+    img, mask = coco.__getitem__(5)
+    img.save('rgb.png')
+    mask.save('mask.png')

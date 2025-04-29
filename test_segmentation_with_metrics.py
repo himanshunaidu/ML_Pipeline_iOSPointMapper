@@ -126,7 +126,7 @@ def main(args):
         dataset = CityscapesSegmentationTest(root=args.data_path, size=args.im_size, scale=args.s,
                                              coarse=False, split=args.split)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
-    elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
+    elif args.dataset == 'edge_mapping': # MARK: edge mapping datasetq
         image_path = os.path.join(args.data_path, "rgb", "*.png")
         image_list = glob.glob(image_path)
         from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
@@ -148,14 +148,14 @@ def main(args):
         from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentation
         dataset = COCOStuffSegmentation(root_dir=args.data_path, split=args.split, is_training=False,
                                          scale=(args.s, args.s), crop_size=args.im_size)
-        seg_classes = 171 # Hardcoded for coco stuff dataset for now
+        seg_classes = 171 # FIXME: Hardcoded for coco stuff dataset for now
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
         exit(-1)
 
 
     # Get a subset of the dataset
-    # dataset = torch.utils.data.Subset(dataset, range(100))
+    # dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
