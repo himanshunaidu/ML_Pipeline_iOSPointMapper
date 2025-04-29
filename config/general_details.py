@@ -6,9 +6,9 @@
 
 # segmentation related details
 segmentation_schedulers = ['poly', 'fixed', 'clr', 'linear', 'hybrid']
-segmentation_datasets = ['pascal', 'city', 'edge_mapping']
+segmentation_datasets = ['pascal', 'city', 'edge_mapping', 'coco_stuff']
 segmentation_models = ['espnetv2', 'bisenetv2']
-segmentation_loss_fns = ['ce', 'bce']
+segmentation_loss_fns = ['ce', 'bce'] # OHEM for BiSeNetV2, but is currently not implemented
 
 
 # detection related details
