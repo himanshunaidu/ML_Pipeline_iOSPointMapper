@@ -70,7 +70,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
         cmap = VOCColormap().get_color_map_voc()
-    elif args.dataset == 'city':
+    elif args.dataset == 'city' or args.dataset == 'edge_mapping':
         cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
@@ -128,10 +128,15 @@ def main(args):
                                              mean=[0, 0, 0], std=[1, 1, 1])
         seg_classes = len(CITYSCAPE_CLASS_LIST)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping datasetq
-        image_path = os.path.join(args.data_path, "rgb", "*.png")
-        image_list = glob.glob(image_path)
-        from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+        from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, EDGE_MAPPING_CLASS_LIST
+        dataset = EdgeMappingSegmentation(root=args.data_path, train=False, scale=args.s, 
+                                          size=args.im_size, ignore_idx=255,
+                                            mean=[0, 0, 0], std=[1, 1, 1])
         seg_classes = len(EDGE_MAPPING_CLASS_LIST)
+        # image_path = os.path.join(args.data_path, "rgb", "*.png")
+        # image_list = glob.glob(image_path)
+        # from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+        # seg_classes = len(EDGE_MAPPING_CLASS_LIST)
     elif args.dataset == 'pascal':
         from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
         seg_classes = len(VOC_CLASS_LIST)
@@ -169,7 +174,7 @@ def main(args):
         args.std = STD
     elif args.model == 'bisenetv2':
         from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
-        seg_classes = seg_classes - 1 if args.dataset == 'city' else seg_classes # Because the background class is not used in the model
+        seg_classes = seg_classes - 1 if (args.dataset == 'city' or args.dataset == 'edge_mapping') else seg_classes # Because the background class is not used in the model
         args.classes = seg_classes
         model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
         # Eventually, the following mean and std related info should be moved to global config

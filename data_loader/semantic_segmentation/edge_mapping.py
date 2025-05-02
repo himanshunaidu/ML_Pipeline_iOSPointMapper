@@ -2,16 +2,139 @@ import torch
 import torch.utils.data as data
 import os
 from PIL import Image
+import numpy as np
 import pandas as pd
-from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose
+from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose, ToTensor
+from transforms.semantic_segmentation.data_transforms import MEAN, STD
 
 EDGE_MAPPING_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
                         'bicycle', 'background']
 
+# Mapping from edge mapping classes to **custom** cocostuff classes
+## This customization of cocostuff classes comes from edge mapping repository
+## done to map the fewer relevant classes to a continuous range of classes
+edge_mapping_to_custom_cocoStuff_dict = {0:41, 1:35, 2:19, 3:50, 4:24, 5:0, 6:8, 7:11, 8:31, 9:27,
+                            10:0, 11:1, 12:1, 13:3, 14:12, 15:5, 16:6, 17:2, 18:2, 19:0}
+
 class EdgeMappingSegmentation(data.Dataset):
     """
     Dataset class for Edge Mapping dataset.
+    
+    Note: While the dataset supports both training and testing, the current implementation
+    only supports testing with the Cityscapes classes. 
+    """
+
+    def __init__(self, root, train=False, scale=(0.5, 2.0), size=(1024, 512), ignore_idx=255,
+                 *, mean=MEAN, std=STD,
+                 is_custom=False, custom_mapping_dict=None):
+        """
+        Initialize the dataset class.
+
+        Parameters:
+        ----------
+        root: str
+            Path to the dataset folder.
+
+        train: bool
+            Flag to indicate if the dataset is for training or testing.
+
+        scale: tuple
+            Tuple containing the scaling range for RandomScale transform.
+
+        size: tuple
+            Tuple containing the size of the image.
+
+        ignore_idx: int
+            Index to ignore in the ground truth mask.
+        """
+        self.train = train
+        if self.train:
+            data_file = os.path.join(root, 'train.txt')
+        else:
+            data_file = os.path.join(root, 'val.txt')
+
+        self.images = []
+        self.masks = []
+        with open(data_file, 'r') as lines:
+            for line in lines:
+                line_split = line.split(',')
+                rgb_img_loc = root + os.sep + line_split[0].rstrip()
+                label_img_loc = root + os.sep + line_split[1].rstrip()
+                assert os.path.isfile(rgb_img_loc)
+                assert os.path.isfile(label_img_loc)
+                self.images.append(rgb_img_loc)
+                self.masks.append(label_img_loc)
+
+        if isinstance(size, tuple):
+            self.size = size
+        else:
+            self.size = (size, size)
+
+        if isinstance(scale, tuple):
+            self.scale = scale
+        else:
+            self.scale = (scale, scale)
+
+        self.mean = mean
+        self.std = std
+
+        self.train_transforms, self.val_transforms = self.transforms()
+        self.ignore_idx = ignore_idx
+
+        self.is_custom = is_custom
+        assert not is_custom or custom_mapping_dict is not None, "Custom mapping dictionary should be provided when is_custom is True."
+        self.custom_mapping_dict = custom_mapping_dict
+
+    def transforms(self):
+        train_transforms = Compose(
+            [
+                RandomScale(scale=self.scale),
+                RandomCrop(crop_size=self.size),
+                RandomFlip(),
+                # Normalize()
+                ToTensor(mean=self.mean, std=self.std)
+            ]
+        )
+        val_transforms = Compose(
+            [
+                Resize(size=self.size),
+                # Normalize()
+                ToTensor(mean=self.mean, std=self.std)
+            ]
+        )
+        return train_transforms, val_transforms
+    
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, index):
+        rgb_img = Image.open(self.images[index]).convert('RGB')
+        label_img = Image.open(self.masks[index])
+
+        if self.train:
+            rgb_img, label_img = self.train_transforms(rgb_img, label_img)
+        else:
+            rgb_img, label_img = self.val_transforms(rgb_img, label_img)
+
+        return rgb_img, label_img
+
+    def _process_mask(self, mask):
+        mask = np.array(mask, dtype=np.uint8)
+
+        ##################  For tuning on our custom data
+        if self.is_custom:
+            new_mask = np.zeros_like(mask)
+            for k, v in self.custom_mapping_dict.items():
+                new_mask[mask == k] = v
+            mask = new_mask
+        
+        return mask
+
+
+class EdgeMappingSegmentationTest(data.Dataset):
+    """
+    Dataset class for Edge Mapping dataset (test version).
     
     Note: While the dataset supports both training and testing, the current implementation
     only supports testing with the Cityscapes classes. 
@@ -67,13 +190,15 @@ class EdgeMappingSegmentation(data.Dataset):
                 RandomScale(scale=self.scale),
                 RandomCrop(crop_size=self.size),
                 RandomFlip(),
-                Normalize()
+                # Normalize()
+                ToTensor(mean=self.mean, std=self.std)
             ]
         )
         val_transforms = Compose(
             [
                 Resize(size=self.size),
-                Normalize()
+                # Normalize()
+                ToTensor(mean=self.mean, std=self.std)
             ]
         )
         return train_transforms, val_transforms

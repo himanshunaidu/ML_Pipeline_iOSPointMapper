@@ -74,7 +74,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
         cmap = VOCColormap().get_color_map_voc()
-    elif args.dataset == 'city':
+    elif args.dataset == 'city' or args.dataset == 'edge_mapping':
         cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
@@ -122,14 +122,16 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             target_i = target_i.type(torch.ByteTensor)
             target_i_image = F.to_pil_image(target_i.cpu()*10)
             target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
-            target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
-            target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
-            target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
+            if cmap is not None:
+                target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
+                target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
+                target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
             img_out_image = F.to_pil_image(img_out_processed.cpu()*10)
             img_out_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index*args.batch_size + i)))
-            img_out_rgb_image = grayscale_tensor_to_rgb_tensor(img_out_processed, cmap)
-            img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
-            img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
+            if cmap is not None:
+                img_out_rgb_image = grayscale_tensor_to_rgb_tensor(img_out_processed, cmap)
+                img_out_rgb_image = F.to_pil_image(img_out_rgb_image.cpu())
+                img_out_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index*args.batch_size + i)))
 
     # Get the metrics
     save_object = custom_eval.get_results()
@@ -157,10 +159,15 @@ def main(args):
                                              coarse=False, split=args.split)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-        image_path = os.path.join(args.data_path, "rgb", "*.png")
-        image_list = glob.glob(image_path)
-        from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+        from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, EDGE_MAPPING_CLASS_LIST
+        dataset = EdgeMappingSegmentation(root=args.data_path, train=False, scale=args.s, 
+                                          size=args.im_size, ignore_idx=255,
+                                            mean=[0, 0, 0], std=[1, 1, 1])
         seg_classes = len(EDGE_MAPPING_CLASS_LIST)
+        # image_path = os.path.join(args.data_path, "rgb", "*.png")
+        # image_list = glob.glob(image_path)
+        # from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+        # seg_classes = len(EDGE_MAPPING_CLASS_LIST)
     elif args.dataset == 'pascal':
         from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
         seg_classes = len(VOC_CLASS_LIST)
@@ -174,6 +181,11 @@ def main(args):
                 if not os.path.isfile(rgb_img_loc):
                     print_error_message('{} image file does not exist'.format(rgb_img_loc))
                 image_list.append(rgb_img_loc)
+    elif args.dataset == 'coco_stuff':
+        from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentation
+        dataset = COCOStuffSegmentation(root_dir=args.data_path, split=args.split, is_training=False,
+                                         scale=(args.s, args.s), crop_size=args.im_size)
+        seg_classes = 171 # FIXME: Hardcoded for coco stuff dataset for now
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
         exit(-1)
@@ -193,12 +205,15 @@ def main(args):
         args.std = STD
     elif args.model == 'bisenetv2':
         from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
-        seg_classes = seg_classes - 1 if args.dataset == 'city' else seg_classes # Because the background class is not used in the model
+        seg_classes = seg_classes - 1 if (args.dataset == 'city' or args.dataset == 'edge_mapping') else seg_classes # Because the background class is not used in the model
         args.classes = seg_classes
         model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
         if args.dataset == 'city' or args.dataset == 'edge_mapping':
             args.mean = (0.3257, 0.3690, 0.3223)
             args.std = (0.2112, 0.2148, 0.2115)
+        elif args.dataset == 'coco_stuff':
+            args.mean = (0.46962251, 0.4464104,  0.40718787)
+            args.std = (0.27469736, 0.27012361, 0.28515933)
         else:
             args.mean = MEAN
             args.std = STD
@@ -290,6 +305,8 @@ if __name__ == '__main__':
         args.savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
         args.savedir = 'results_test/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
+    elif args.dataset == 'coco_stuff':
+        args.savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
 
