@@ -128,10 +128,13 @@ def main(args):
                                              mean=[0, 0, 0], std=[1, 1, 1])
         seg_classes = len(CITYSCAPE_CLASS_LIST)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping datasetq
-        from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, EDGE_MAPPING_CLASS_LIST
+        from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, EDGE_MAPPING_CLASS_LIST, edge_mapping_to_custom_cocoStuff_dict
+        if args.is_custom and args.custom_mapping_dict is None:
+            args.custom_mapping_dict = edge_mapping_to_custom_cocoStuff_dict
         dataset = EdgeMappingSegmentation(root=args.data_path, train=False, scale=args.s, 
                                           size=args.im_size, ignore_idx=255,
-                                            mean=[0, 0, 0], std=[1, 1, 1])
+                                            mean=[0, 0, 0], std=[1, 1, 1],
+                                            is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
         seg_classes = len(EDGE_MAPPING_CLASS_LIST)
         # image_path = os.path.join(args.data_path, "rgb", "*.png")
         # image_list = glob.glob(image_path)
@@ -237,6 +240,8 @@ if __name__ == '__main__':
     parser.add_argument('--model-width', default=224, type=int, help='Model width')
     parser.add_argument('--model-height', default=224, type=int, help='Model height')
     parser.add_argument('--channels', default=3, type=int, help='Input channels')
+    parser.add_argument('--is-custom', default=False, type=bool, help='Use custom mapping dictionary')
+    parser.add_argument('--custom-mapping-dict', default=None, type=dict, help='Custom mapping dictionary')
     parser.add_argument('--num-classes', default=1000, type=int,
                         help='ImageNet classes. Required for loading the base network')
     parser.add_argument('--savedir', type=str, default='./results_segmentation_test', help='Location to save the results')
