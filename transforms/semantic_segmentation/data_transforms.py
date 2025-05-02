@@ -87,6 +87,17 @@ class RandomFlip(object):
             label_img = label_img.transpose(Image.FLIP_LEFT_RIGHT)
         return rgb_img, label_img
 
+class RandomHorizontalFlip(object):
+
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, rgb_img, label_img):
+        if np.random.random() < self.p:
+            return rgb_img, label_img
+        # assert rgb_img.shape[:2] == label_img.shape[:2]
+        return rgb_img[:, ::-1, :], label_img[:, ::-1]
+
 
 class RandomScale(object):
     '''
@@ -224,6 +235,51 @@ class Resize(object):
         rgb_img = rgb_img.resize(self.size, Image.BILINEAR)
         label_img = label_img.resize(self.size, Image.NEAREST)
         return rgb_img, label_img
+
+class ColorJitter(object):
+
+    def __init__(self, brightness=None, contrast=None, saturation=None):
+        if not brightness is None and brightness >= 0:
+            self.brightness = [max(1-brightness, 0), 1+brightness]
+        if not contrast is None and contrast >= 0:
+            self.contrast = [max(1-contrast, 0), 1+contrast]
+        if not saturation is None and saturation >= 0:
+            self.saturation = [max(1-saturation, 0), 1+saturation]
+
+    def __call__(self, rgb_img, label_img):
+        if not self.brightness is None:
+            rate = np.random.uniform(*self.brightness)
+            rgb_img = self.adj_brightness(rgb_img, rate)
+        if not self.contrast is None:
+            rate = np.random.uniform(*self.contrast)
+            rgb_img = self.adj_contrast(rgb_img, rate)
+        if not self.saturation is None:
+            rate = np.random.uniform(*self.saturation)
+            rgb_img = self.adj_saturation(rgb_img, rate)
+        return dict(rgb_img=rgb_img, label_img=label_img)
+
+    def adj_saturation(self, rgb_img, rate):
+        M = np.float32([
+            [1+2*rate, 1-rate, 1-rate],
+            [1-rate, 1+2*rate, 1-rate],
+            [1-rate, 1-rate, 1+2*rate]
+        ])
+        shape = rgb_img.shape
+        rgb_img = np.matmul(rgb_img.reshape(-1, 3), M).reshape(shape)/3
+        rgb_img = np.clip(rgb_img, 0, 255).astype(np.uint8)
+        return rgb_img
+
+    def adj_brightness(self, rgb_img, rate):
+        table = np.array([
+            i * rate for i in range(256)
+        ]).clip(0, 255).astype(np.uint8)
+        return table[rgb_img]
+
+    def adj_contrast(self, rgb_img, rate):
+        table = np.array([
+            74 + (i - 74) * rate for i in range(256)
+        ]).clip(0, 255).astype(np.uint8)
+        return table[rgb_img]
 
 
 class Compose(object):

@@ -70,7 +70,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
         cmap = VOCColormap().get_color_map_voc()
-    elif args.dataset == 'city':
+    elif args.dataset == 'city' or args.dataset == 'edge_mapping':
         cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
@@ -121,17 +121,28 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 def main(args):
     # read all the images in the folder
     if args.dataset == 'city':
-        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST, CityscapesSegmentation
+        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST, CityscapesSegmentation, cityscape_to_custom_cocoStuff_dict
         from data_loader.semantic_segmentation.backup import CityscapesSegmentationTest
+        if args.is_custom and args.custom_mapping_dict is None:
+            args.custom_mapping_dict = cityscape_to_custom_cocoStuff_dict
         dataset = CityscapesSegmentation(root=args.data_path, size=args.im_size, scale=args.s,
                                              coarse=False, train=(args.split == 'train'),
-                                             mean=[0, 0, 0], std=[1, 1, 1])
+                                             mean=[0, 0, 0], std=[1, 1, 1],
+                                             is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping datasetq
-        image_path = os.path.join(args.data_path, "rgb", "*.png")
-        image_list = glob.glob(image_path)
-        from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+        from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, EDGE_MAPPING_CLASS_LIST, edge_mapping_to_custom_cocoStuff_dict
+        if args.is_custom and args.custom_mapping_dict is None:
+            args.custom_mapping_dict = edge_mapping_to_custom_cocoStuff_dict
+        dataset = EdgeMappingSegmentation(root=args.data_path, train=False, scale=args.s, 
+                                          size=args.im_size, ignore_idx=255,
+                                            mean=[0, 0, 0], std=[1, 1, 1],
+                                            is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
         seg_classes = len(EDGE_MAPPING_CLASS_LIST)
+        # image_path = os.path.join(args.data_path, "rgb", "*.png")
+        # image_list = glob.glob(image_path)
+        # from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
+        # seg_classes = len(EDGE_MAPPING_CLASS_LIST)
     elif args.dataset == 'pascal':
         from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
         seg_classes = len(VOC_CLASS_LIST)
@@ -169,7 +180,7 @@ def main(args):
         args.std = STD
     elif args.model == 'bisenetv2':
         from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
-        seg_classes = seg_classes - 1 if args.dataset == 'city' else seg_classes # Because the background class is not used in the model
+        seg_classes = seg_classes - 1 if (args.dataset == 'city' or args.dataset == 'edge_mapping') else seg_classes # Because the background class is not used in the model
         args.classes = seg_classes
         model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
         # Eventually, the following mean and std related info should be moved to global config
@@ -232,6 +243,8 @@ if __name__ == '__main__':
     parser.add_argument('--model-width', default=224, type=int, help='Model width')
     parser.add_argument('--model-height', default=224, type=int, help='Model height')
     parser.add_argument('--channels', default=3, type=int, help='Input channels')
+    parser.add_argument('--is-custom', default=False, type=bool, help='Use custom mapping dictionary')
+    parser.add_argument('--custom-mapping-dict', default=None, type=dict, help='Custom mapping dictionary')
     parser.add_argument('--num-classes', default=1000, type=int,
                         help='ImageNet classes. Required for loading the base network')
     parser.add_argument('--savedir', type=str, default='./results_segmentation_test', help='Location to save the results')

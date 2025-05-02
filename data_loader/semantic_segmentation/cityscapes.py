@@ -1,6 +1,7 @@
 import torch
 import torch.utils.data as data
 import os
+import numpy as np
 from PIL import Image
 from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose
 from transforms.semantic_segmentation.data_transforms import VerticalHalfCrop, Identity, ToTensor
@@ -15,10 +16,17 @@ CITYSCAPE_TRAIN_CMAP = {
     label.trainId: label.color for index, label in enumerate(labels)
 }
 
+# Mapping from cityscapes classes to **custom** cocostuff classes
+## This customization of cocostuff classes comes from edge mapping repository
+## done to map the fewer relevant classes to a continuous range of classes
+cityscape_to_custom_cocoStuff_dict = {0:41, 1:35, 2:19, 3:50, 4:24, 5:0, 6:8, 7:11, 8:31, 9:27,
+                            10:0, 11:1, 12:1, 13:3, 14:12, 15:5, 16:6, 17:2, 18:2, 19:0}
+
 class CityscapesSegmentation(data.Dataset):
 
     def __init__(self, root, train=True, scale=(0.5, 2.0), size=(1024, 512), ignore_idx=255, coarse=True,
-                 *, mean=MEAN, std=STD):
+                 *, mean=MEAN, std=STD,
+                 is_custom=False, custom_mapping_dict=None):
         """
         Note: The split argument was added only recently. Will need to be incorporated more properly. 
         """
@@ -71,6 +79,10 @@ class CityscapesSegmentation(data.Dataset):
         self.train_transforms, self.val_transforms = self.transforms()
         self.ignore_idx = ignore_idx
 
+        self.is_custom = is_custom
+        assert not is_custom or custom_mapping_dict is not None, "Custom mapping dictionary should be provided when is_custom is True."
+        self.custom_mapping_dict = custom_mapping_dict
+
     def transforms(self):
         train_transforms = Compose(
             [
@@ -97,12 +109,26 @@ class CityscapesSegmentation(data.Dataset):
         rgb_img = Image.open(self.images[index]).convert('RGB')
         label_img = Image.open(self.masks[index])
 
+        label_img = self._process_mask(label_img)
+
         if self.train:
             rgb_img, label_img = self.train_transforms(rgb_img, label_img)
         else:
             rgb_img, label_img = self.val_transforms(rgb_img, label_img)
 
         return rgb_img, label_img
+
+    def _process_mask(self, mask):
+        mask = np.array(mask, dtype=np.uint8)
+
+        ##################  For tuning on our custom data
+        if self.is_custom:
+            new_mask = np.zeros_like(mask)
+            for k, v in self.custom_mapping_dict.items():
+                new_mask[mask == k] = v
+            mask = new_mask
+        
+        return Image.fromarray(mask)
 
 class CityscapesSegmentationForAccessibility(CityscapesSegmentation):
     """
@@ -112,8 +138,10 @@ class CityscapesSegmentationForAccessibility(CityscapesSegmentation):
     We assume that both the halves can give a better focus from a pedestrian's perspective.
     """
     def __init__(self, root, train=True, scale=(0.5, 2.0), size=(512, 512), ignore_idx=255, coarse=True,
-                 *, mean=MEAN, std=STD):
-        super().__init__(root, train, scale, size, ignore_idx, coarse, mean=mean, std=std)
+                 *, mean=MEAN, std=STD,
+                 is_custom=False, custom_mapping_dict=None):
+        super().__init__(root, train, scale, size, ignore_idx, coarse, mean=mean, std=std,
+                         is_custom=is_custom, custom_mapping_dict=custom_mapping_dict)
 
     def __len__(self):
         # Return twice the number of images for accessibility focus
@@ -126,6 +154,8 @@ class CityscapesSegmentationForAccessibility(CityscapesSegmentation):
 
         rgb_img = Image.open(self.images[half_index]).convert('RGB')
         label_img = Image.open(self.masks[half_index])
+
+        label_img = self._process_mask(label_img)
 
         # Apply the vertical half crop transformation
         rgb_img, label_img = VerticalHalfCrop(index=half_side)(rgb_img, label_img)
