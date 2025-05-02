@@ -153,11 +153,16 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 def main(args):
     # read all the images in the folder
     if args.dataset == 'city':
-        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST
+        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST, CityscapesSegmentation, cityscape_to_custom_cocoStuff_dict
         from data_loader.semantic_segmentation.backup import CityscapesSegmentationTest
-        dataset = CityscapesSegmentationTest(root=args.data_path, size=args.im_size, scale=args.s,
-                                             coarse=False, split=args.split)
+        if args.is_custom and args.custom_mapping_dict is None:
+            args.custom_mapping_dict = cityscape_to_custom_cocoStuff_dict
+        dataset = CityscapesSegmentation(root=args.data_path, size=args.im_size, scale=args.s,
+                                             coarse=False, train=(args.split == 'train'),
+                                             mean=[0, 0, 0], std=[1, 1, 1],
+                                             is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
+        # seg_classes = 172  # Temporarily hardcoded for edge mapping dataset with coco stuff based training
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
         from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, EDGE_MAPPING_CLASS_LIST, edge_mapping_to_custom_cocoStuff_dict
         if args.is_custom and args.custom_mapping_dict is None:
@@ -167,10 +172,6 @@ def main(args):
                                             mean=[0, 0, 0], std=[1, 1, 1],
                                             is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
         seg_classes = len(EDGE_MAPPING_CLASS_LIST)
-        # image_path = os.path.join(args.data_path, "rgb", "*.png")
-        # image_list = glob.glob(image_path)
-        # from data_loader.semantic_segmentation.edge_mapping import EDGE_MAPPING_CLASS_LIST
-        # seg_classes = len(EDGE_MAPPING_CLASS_LIST)
     elif args.dataset == 'pascal':
         from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
         seg_classes = len(VOC_CLASS_LIST)

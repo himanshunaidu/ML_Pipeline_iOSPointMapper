@@ -121,11 +121,14 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
 def main(args):
     # read all the images in the folder
     if args.dataset == 'city':
-        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST, CityscapesSegmentation
+        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST, CityscapesSegmentation, cityscape_to_custom_cocoStuff_dict
         from data_loader.semantic_segmentation.backup import CityscapesSegmentationTest
+        if args.is_custom and args.custom_mapping_dict is None:
+            args.custom_mapping_dict = cityscape_to_custom_cocoStuff_dict
         dataset = CityscapesSegmentation(root=args.data_path, size=args.im_size, scale=args.s,
                                              coarse=False, train=(args.split == 'train'),
-                                             mean=[0, 0, 0], std=[1, 1, 1])
+                                             mean=[0, 0, 0], std=[1, 1, 1],
+                                             is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping datasetq
         from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, EDGE_MAPPING_CLASS_LIST, edge_mapping_to_custom_cocoStuff_dict

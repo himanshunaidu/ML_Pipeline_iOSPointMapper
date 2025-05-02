@@ -112,6 +112,8 @@ class EdgeMappingSegmentation(data.Dataset):
         rgb_img = Image.open(self.images[index]).convert('RGB')
         label_img = Image.open(self.masks[index])
 
+        label_img = self._process_mask(label_img)
+
         if self.train:
             rgb_img, label_img = self.train_transforms(rgb_img, label_img)
         else:
@@ -129,7 +131,7 @@ class EdgeMappingSegmentation(data.Dataset):
                 new_mask[mask == k] = v
             mask = new_mask
         
-        return mask
+        return Image.fromarray(mask)
 
 
 class EdgeMappingSegmentationTest(data.Dataset):
