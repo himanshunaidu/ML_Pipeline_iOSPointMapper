@@ -107,9 +107,11 @@ if __name__ == '__main__':
     # torch_model = torch_model.to('mps')
     # exit()
     traced_model = torch.jit.trace(torch_model, im)
+    # scripted_model = torch.jit.script(torch_model)
 
     ml_model = ct.convert(
         traced_model,
+        # scripted_model,
         inputs=[ct.ImageType(name="input", shape=im.shape, scale=scale, bias=bias)],
         outputs=[ct.ImageType(name="output", color_layout=ct.colorlayout.GRAYSCALE)],
         # compute_precision=ct.precision.FLOAT16
