@@ -14,8 +14,32 @@ EDGE_MAPPING_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pol
 # Mapping from edge mapping classes to **custom** cocostuff classes
 ## This customization of cocostuff classes comes from edge mapping repository
 ## done to map the fewer relevant classes to a continuous range of classes
+# edge_mapping_to_custom_cocoStuff_dict = {0:41, 1:35, 2:19, 3:50, 4:24, 5:0, 6:8, 7:11, 8:31, 9:27,
+#                             10:0, 11:1, 12:1, 13:3, 14:12, 15:5, 16:6, 17:2, 18:2, 19:0}
+# More corrected:
 edge_mapping_to_custom_cocoStuff_dict = {0:41, 1:35, 2:19, 3:50, 4:24, 5:0, 6:8, 7:11, 8:31, 9:27,
-                            10:0, 11:1, 12:1, 13:3, 14:12, 15:5, 16:6, 17:2, 18:2, 19:0}
+                            10:0, 11:1, 12:1, 13:3, 14:7, 15:5, 16:6, 17:4, 18:2, 19:0}
+
+# Mapping from custom cocostuff labels to Cityscapes class names
+custom_cocoStuff_to_cityscapes_name_dict = {
+    41: 'road',
+    35: 'sidewalk',
+    19: 'building',
+    50: 'wall',
+    24: 'fence',
+    0: 'background',  # This is a catch-all for any class not explicitly mapped
+    8: 'traffic light',
+    11: 'traffic sign',
+    31: 'vegetation',
+    27: 'terrain',
+    1: 'person',
+    3: 'car',
+    7: 'truck',
+    5: 'bus',
+    6: 'train',
+    4: 'motorcycle',
+    2: 'bicycle'
+}
 
 class EdgeMappingSegmentation(data.Dataset):
     """
