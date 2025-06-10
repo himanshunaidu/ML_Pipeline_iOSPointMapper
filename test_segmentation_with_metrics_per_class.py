@@ -136,9 +136,9 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     # Get the metrics
     save_object = custom_eval.get_results()
     save_object['type'] = 'all'
-    for i in range(args.classes):
-        save_object_per_class = custom_eval_per_class[i].get_results()
-        save_object_per_class['type'] = 'class_{}'.format(i)
+    # for i in range(args.classes):
+    #     save_object_per_class = custom_eval_per_class[i].get_results()
+    #     save_object_per_class['type'] = 'class_{}'.format(i)
     save_path = os.path.join(args.savedir, 'metrics.jsonl')
     with open(save_path, 'w') as f:
         json.dump(save_object, f)
@@ -162,6 +162,7 @@ def main(args):
                                              mean=[0, 0, 0], std=[1, 1, 1],
                                              is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
         seg_classes = len(CITYSCAPE_CLASS_LIST)
+        if args.is_custom: seg_classes = 53
         # seg_classes = 172  # Temporarily hardcoded for edge mapping dataset with coco stuff based training
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
         from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, EDGE_MAPPING_CLASS_LIST, edge_mapping_to_custom_cocoStuff_dict
@@ -172,6 +173,7 @@ def main(args):
                                             mean=[0, 0, 0], std=[1, 1, 1],
                                             is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
         seg_classes = len(EDGE_MAPPING_CLASS_LIST)
+        if args.is_custom: seg_classes = 53
     elif args.dataset == 'pascal':
         from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
         seg_classes = len(VOC_CLASS_LIST)
@@ -196,7 +198,7 @@ def main(args):
 
 
     # Get a subset of the dataset
-    # dataset = torch.utils.data.Subset(dataset, range(10))
+    # dataset = torch.utils.data.Subset(dataset, range(100))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
@@ -209,7 +211,7 @@ def main(args):
         args.std = STD
     elif args.model == 'bisenetv2':
         from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
-        seg_classes = seg_classes - 1 if (args.dataset == 'city' or args.dataset == 'edge_mapping') else seg_classes # Because the background class is not used in the model
+        seg_classes = seg_classes - 1 if ((args.dataset == 'city' or args.dataset == 'edge_mapping') and not args.is_custom) else seg_classes # Because the background class is not used in the model
         args.classes = seg_classes
         model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
         if args.dataset == 'city' or args.dataset == 'edge_mapping':

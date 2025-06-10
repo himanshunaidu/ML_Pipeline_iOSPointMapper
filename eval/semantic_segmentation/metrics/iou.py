@@ -79,4 +79,6 @@ class IOU(object):
         area_mask = torch.histc(target.float(), bins=self.num_classes, min=self.min_range, max=self.max_range)
         area_union = area_pred + area_mask - area_inter + self.epsilon
 
+        # print('Local iou', area_inter.numpy(), area_pred.numpy(), area_mask.numpy(), area_union.numpy())
+
         return area_inter.numpy(), area_union.numpy()
