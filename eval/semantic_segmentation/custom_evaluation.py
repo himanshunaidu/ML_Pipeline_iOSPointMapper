@@ -7,6 +7,7 @@ import time
 from eval.utils import AverageMeter
 from eval.semantic_segmentation.metrics.iou import IOU
 from eval.semantic_segmentation.metrics.dice import Dice
+from eval.semantic_segmentation.metrics.f1 import F1Score
 from eval.semantic_segmentation.metrics.persello import Persello
 from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
 from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, cityscapesIdToClassMap
@@ -44,6 +45,9 @@ class CustomEvaluation:
         self.batch_time = AverageMeter()
         self.inter_meter = AverageMeter()
         self.union_meter = AverageMeter()
+        self.f1_score_meter = AverageMeter()
+        self.precision_meter = AverageMeter()
+        self.recall_meter = AverageMeter()
         self.dice_numerator_meter = AverageMeter()
         self.dice_denominator_meter = AverageMeter()
         self.persello_over_list = []
@@ -70,6 +74,8 @@ class CustomEvaluation:
         self.dice_class = Dice(num_classes=self.num_classes, 
                                is_output_probabilities=self.is_output_probabilities,
                                min_range=self.miou_min_range, max_range=self.miou_max_range)
+        self.f1_score_class = F1Score(num_classes=self.num_classes,
+                                      is_output_probabilities=self.is_output_probabilities)
         self.persello_class = Persello(num_classes=self.num_classes, max_regions=self.max_regions, 
                                        is_output_probabilities=self.is_output_probabilities)
         self.romrum_class = ROMRUM(num_classes=self.num_classes, max_regions=self.max_regions,
@@ -78,6 +84,7 @@ class CustomEvaluation:
         # To record time taken for each metric
         self.miou_times = []
         self.dice_times = []
+        self.f1_score_times = []
         self.persello_times = []
         self.romrum_times = []
         self.persello_old_times = []
@@ -156,6 +163,14 @@ class CustomEvaluation:
         self.dice_times.append(time.time() - dice_start_time)
         self.dice_numerator_meter.update(area_numerator)
         self.dice_denominator_meter.update(area_denominator)
+        
+        # Calculate F1 Score, Precision, and Recall
+        f1_start_time = time.time()
+        f1_scores, precisions, recalls = self.f1_score_class.get_f1_score(output, target)
+        self.f1_score_times.append(time.time() - f1_start_time)
+        self.f1_score_meter.update(f1_scores)
+        self.precision_meter.update(precisions)
+        self.recall_meter.update(recalls)
 
         # Calculate Persello (New)
         persello_start_time = time.time()
@@ -218,6 +233,13 @@ class CustomEvaluation:
         dice = self.dice_numerator_meter.sum / (self.dice_denominator_meter.sum + 1e-10)
         miou = iou.mean().item() # Need to item() to convert from array to scalar
         mdice = dice.mean().item() # Need to item() to convert from array to scalar
+        
+        f1_score = self.f1_score_meter.sum / (self.f1_score_meter.count + 1e-10)
+        precision = self.precision_meter.sum / (self.precision_meter.count + 1e-10)
+        recall = self.recall_meter.sum / (self.recall_meter.count + 1e-10)
+        m_f1_score = f1_score.mean().item()  # Need to item() to convert from array to scalar
+        m_precision = precision.mean().item()  # Need to item() to convert from array to scalar
+        m_recall = recall.mean().item()  # Need to item() to convert from array to scalar
 
         persello_over = self.persello_over_meter.sum / (self.persello_over_meter.count + 1e-10)
         persello_under = self.persello_under_meter.sum / (self.persello_under_meter.count + 1e-10)
@@ -232,6 +254,9 @@ class CustomEvaluation:
         results = {
             'mIoU': miou,
             'mDice': mdice,
+            'mF1_Score': m_f1_score,
+            'mPrecision': m_precision,
+            'mRecall': m_recall,
             'Persello_Oversegmentation': persello_over,
             'Persello_Undersegmentation': persello_under,
             'ROM_RUM_Oversegmentation': romrum_over,
@@ -243,6 +268,7 @@ class CustomEvaluation:
 
             'mIoU_times': self.miou_times,
             'mDice_times': self.dice_times,
+            'mF1_Score_times': self.f1_score_times,
             'Persello_times': self.persello_times,
             'ROM_RUM_times': self.romrum_times,
             'Persello_Old_times': self.persello_old_times,
