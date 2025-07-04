@@ -74,20 +74,25 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     if args.dataset == 'pascal':
         from utilities.color_map import VOCColormap
         cmap = VOCColormap().get_color_map_voc()
-    elif args.dataset == 'city' or args.dataset == 'edge_mapping':
+    elif args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper':
         cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
 
     custom_eval = CustomEvaluation(num_classes=args.classes, max_regions=1024, is_output_probabilities=True, 
                                    idToClassMap=cityscapesIdToClassMap, args=args)
+    
+    # eval_classes = [i for i in range(args.classes)]
+    # eval_classes = [22, 16, 10, 8, 21] # sidewalk, building, traffic sign, traffic light, pole
+    # eval_classes = [35, 19, 11, 8, 0] # sidewalk, building, traffic sign, traffic light, pole
+    eval_classes = [1, 2, 7, 6, 5]
     # Also get custom evaluation metrics per class
     # This will take in non-probability outputs to make the evaluation easier
-    custom_eval_per_class = [
-        CustomEvaluation(num_classes=1, max_regions=1024, is_output_probabilities=False,
+    custom_eval_per_class = {
+        eval_class: CustomEvaluation(num_classes=1, max_regions=1024, is_output_probabilities=False,
                          idToClassMap={0: 'road'}, miou_min_range=1, miou_max_range=2,
-                         args=args) for _ in range(args.classes)
-    ]
+                         args=args) for eval_class in eval_classes
+    }
 
     model.eval()
     # for i, imgName in tqdm(enumerate(zip(image_list, test_image_list)), total=len(image_list)):
@@ -107,7 +112,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
             custom_eval.update(output=img_out_i, target=target_i)
             img_out_processed, target_processed = preprocess_inputs(img_out_i, target_i)
 
-            for j in range(args.classes):
+            for j in eval_classes:
                 # Set class j to 0 in the output and target tensors
                 # Set every other class to 255 in the output and target tensors
                 img_out_processed_j = img_out_processed.clone()
@@ -136,14 +141,14 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     # Get the metrics
     save_object = custom_eval.get_results()
     save_object['type'] = 'all'
-    # for i in range(args.classes):
+    # for i in eval_classes:
     #     save_object_per_class = custom_eval_per_class[i].get_results()
     #     save_object_per_class['type'] = 'class_{}'.format(i)
     save_path = os.path.join(args.savedir, 'metrics.jsonl')
     with open(save_path, 'w') as f:
         json.dump(save_object, f)
         f.write('\n')
-        for i in range(args.classes):
+        for i in eval_classes:
             save_object_per_class = custom_eval_per_class[i].get_results()
             save_object_per_class['type'] = 'class_{}'.format(i)
             json.dump(save_object_per_class, f)
@@ -174,6 +179,16 @@ def main(args):
                                             is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
         seg_classes = len(EDGE_MAPPING_CLASS_LIST)
         if args.is_custom: seg_classes = 53
+    elif args.dataset == 'ios_point_mapper':
+        from data_loader.semantic_segmentation.ios_point_mapper import iOSPointMapperDataset, IOS_POINT_MAPPER_CLASS_LIST, ios_point_mapper_to_cocoStuff_dict
+        if args.is_custom and args.custom_mapping_dict is None:
+            args.custom_mapping_dict = ios_point_mapper_to_cocoStuff_dict
+        dataset = iOSPointMapperDataset(root=args.data_path, train=False, scale=args.s,
+                                        size=args.im_size, ignore_idx=255,
+                                        mean=[0, 0, 0], std=[1, 1, 1],
+                                        is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
+        seg_classes = len(IOS_POINT_MAPPER_CLASS_LIST)
+        if args.is_custom: seg_classes = 53
     elif args.dataset == 'pascal':
         from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
         seg_classes = len(VOC_CLASS_LIST)
@@ -191,7 +206,7 @@ def main(args):
         from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentation
         dataset = COCOStuffSegmentation(root_dir=args.data_path, split=args.split, is_training=False,
                                          scale=(args.s, args.s), crop_size=args.im_size)
-        seg_classes = 171 # FIXME: Hardcoded for coco stuff dataset for now
+        seg_classes = 19 # FIXME: Hardcoded for coco stuff dataset for now
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
         exit(-1)
@@ -211,10 +226,10 @@ def main(args):
         args.std = STD
     elif args.model == 'bisenetv2':
         from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
-        seg_classes = seg_classes - 1 if ((args.dataset == 'city' or args.dataset == 'edge_mapping') and not args.is_custom) else seg_classes # Because the background class is not used in the model
+        seg_classes = seg_classes - 1 if ((args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper') and not args.is_custom) else seg_classes # Because the background class is not used in the model
         args.classes = seg_classes
         model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
-        if args.dataset == 'city' or args.dataset == 'edge_mapping':
+        if args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper':
             args.mean = (0.3257, 0.3690, 0.3223)
             args.std = (0.2112, 0.2148, 0.2115)
         elif args.dataset == 'coco_stuff':
@@ -310,6 +325,8 @@ if __name__ == '__main__':
     if args.dataset == 'city':
         args.savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
+        args.savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
+    elif args.dataset == 'ios_point_mapper':
         args.savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
         args.savedir = 'results_test/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)

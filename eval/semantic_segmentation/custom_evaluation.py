@@ -189,6 +189,9 @@ class CustomEvaluation:
         self.romrum_under_list.append(romrum_under)
         self.romrum_over_meter.update(romrum_over)
         self.romrum_under_meter.update(romrum_under)
+        
+        # Exit early since old metrics are not needed
+        return
 
         ## Before calculating the old versions, we need to convert the output and target tensors
         # to numpy arrays and map the class indices to the old class indices

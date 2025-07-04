@@ -25,9 +25,19 @@ ios_point_mapper_dict = {
 # Mapping from edge mapping classes to **custom** cocostuff classes
 ## This customization of cocostuff classes comes from edge mapping repository
 ## done to map the fewer relevant classes to a continuous range of classes
-ios_point_mapper_to_cocoStuff_dict = {0:0, 1:2, 2:0, 3:0, 4:16, 5:5, 6:3, 7:0, 8:20, 9:0, 10:25,
-                                      11:4, 12:0, 13:1, 14:21, 15:26, 16:1, 17:27, 18:22, 19:0, 20:0,
-                                      21:19, 22:8, 23:10, 24:6, 25:7, 26:0, 27:15, 28:33}
+# ios_point_mapper_to_cocoStuff_dict = {0:0, 1:2, 2:0, 3:0, 4:16, 5:5, 6:3, 7:0, 8:20, 9:0, 10:25,
+#                                       11:4, 12:0, 13:1, 14:21, 15:26, 16:1, 17:27, 18:22, 19:0, 20:0,
+#                                       21:19, 22:8, 23:10, 24:6, 25:7, 26:0, 27:15, 28:33}
+
+# ios_point_mapper_to_cocoStuff_dict = {0:0, 1:2, 2:0, 3:0, 4:19, 5:5, 6:3, 7:0, 8:24, 9:0, 10:0, 
+#                                       11:2, 12:0, 13:1, 14:0, 15:0, 16:1, 17:41, 18:35, 19:0, 20:0, 
+#                                       21:27, 22:8, 23:11, 24:6, 25:12, 26:0, 27:31, 28:50}
+
+ios_point_mapper_to_cocoStuff_dict = {
+    0:255, 1:18, 2:255, 3:255, 4:2, 5:15, 6:13, 7:255, 8:4, 9:255, 10:255, 11:17, 12:255,
+    13:11, 14:5, 15:255, 16:12, 17:0, 18:1, 19:10, 20:255, 21:9, 22:6, 23:7, 24:16, 25:14, 
+    26:255, 27:8, 28:3}
+
 
 class iOSPointMapperDataset(data.Dataset):
     """
