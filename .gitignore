@@ -1,5 +1,5 @@
 # Package Specific
-command
+command*
 analyze.py
 
 ## Data Loader

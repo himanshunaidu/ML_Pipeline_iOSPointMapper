@@ -126,7 +126,8 @@ def set_model_config(args: Namespace, seg_classes: int = 0):
         args.std = STD
     elif args.model == 'bisenetv2':
         from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
-        seg_classes = seg_classes - 1 if ((args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper') and not args.is_custom) else seg_classes # Because the background class is not used in the model
+        seg_classes = seg_classes - 1 if ((args.dataset == 'city' or args.dataset == 'edge_mapping') and not args.is_custom) else seg_classes # Because the background class is not used in the model
+        # seg_classes = seg_classes - 1 if (args.dataset == 'ios_point_mapper') else seg_classes # Temporary
         args.classes = seg_classes
         model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
         if args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper':
@@ -142,6 +143,17 @@ def set_model_config(args: Namespace, seg_classes: int = 0):
         print_error_message('{} network not yet supported'.format(args.model))
         exit(-1)
     return model
+
+def get_cmap(args: Namespace):
+    # get color map for pascal dataset
+    if args.dataset == 'pascal':
+        from utilities.color_map import VOCColormap
+        cmap = VOCColormap().get_color_map_voc()
+    elif args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper':
+        cmap = CITYSCAPE_TRAIN_CMAP
+    else:
+        cmap = None
+    return cmap
 
 def preprocess_inputs(output, target, is_output_probabilities=True):
         """
@@ -203,18 +215,22 @@ def save_images(args: Namespace, input, target, output_prob, output, index, cmap
     input_image.save(os.path.join(args.savedir, 'input', 'input_{}.png'.format(index)))
 
     # Save the target image
-    target_image = F.to_pil_image(target.cpu() * 10)  # Scale the target for better visibility
+    target = target.type(torch.ByteTensor)
+    target_image = F.to_pil_image(target.cpu())  # Scale the target for better visibility
     target_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index)))
     if cmap is not None:
         target_rgb_image = grayscale_tensor_to_rgb_tensor(target.unsqueeze(0), cmap)
         target_rgb_image = F.to_pil_image(target_rgb_image.cpu())
         target_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index)))
 
-    # Save the output probabilities
-    output_prob_image = F.to_pil_image(output_prob.cpu())
-    output_prob_image.save(os.path.join(args.savedir, 'pred_logits', 'pred_logits_{}.png'.format(index)))
+    # Save the output probabilities as numpy array
+    ## First convert to numpy array
+    output_prob = output_prob.cpu().detach().numpy()
+    np.save(os.path.join(args.savedir, 'pred_logits', 'pred_logits_{}.npy'.format(index)), output_prob)
+    
     # Save the output image
-    output_image = F.to_pil_image(output.cpu() * 10)  # Scale the output for better visibility
+    output = output.type(torch.ByteTensor)
+    output_image = F.to_pil_image(output.cpu())  # Scale the output for better visibility
     output_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index)))
     if cmap is not None:
         output_rgb_image = grayscale_tensor_to_rgb_tensor(output.unsqueeze(0), cmap)
@@ -224,22 +240,15 @@ def save_images(args: Namespace, input, target, output_prob, output, index, cmap
 def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     im_size = tuple(args.im_size)
 
-    # get color map for pascal dataset
-    if args.dataset == 'pascal':
-        from utilities.color_map import VOCColormap
-        cmap = VOCColormap().get_color_map_voc()
-    elif args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper':
-        cmap = CITYSCAPE_TRAIN_CMAP
-    else:
-        cmap = None
+    cmap = get_cmap(args)   
 
     custom_eval = CustomEvaluation(num_classes=args.classes, max_regions=1024, is_output_probabilities=True, 
                                    idToClassMap=cityscapesIdToClassMap, args=args)
     
-    # eval_classes = [i for i in range(args.classes)]
+    eval_classes = [i for i in range(args.classes)]
     # eval_classes = [22, 16, 10, 8, 21] # sidewalk, building, traffic sign, traffic light, pole
     # eval_classes = [35, 19, 11, 8, 0] # sidewalk, building, traffic sign, traffic light, pole
-    eval_classes = [1, 2, 7, 6, 5]
+    # eval_classes = [1, 2, 7, 6, 5]
     # Also get custom evaluation metrics per class
     # This will take in non-probability outputs to make the evaluation easier
     custom_eval_per_class = {
@@ -278,7 +287,13 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
                 custom_eval_per_class[j].update(output=img_out_processed_j, target=target_processed_j)
 
             # Save the images
-            save_images(args, input_i, target_i, img_out_i, img_out_processed, index*args.batch_size + i, cmap=cmap)
+            input_i_save = input_i.squeeze(0)
+            target_i_save = target_i.squeeze(0)
+            img_out_i_save = img_out_i.squeeze(0)
+            img_out_processed_save = img_out_processed.squeeze(0)
+            # print("Shapes: input {}, target {}, output {}, output processed {}".format(
+            #     input_i_save.shape, target_i_save.shape, img_out_i_save.shape, img_out_processed_save.shape))
+            save_images(args, input_i_save, target_i_save, img_out_i_save, img_out_processed_save, index*args.batch_size + i, cmap=cmap)
 
     # Get the metrics
     save_object = custom_eval.get_results()
@@ -330,6 +345,8 @@ def main(args):
         os.makedirs(args.savedir)
         os.makedirs(os.path.join(args.savedir, 'target'))
         os.makedirs(os.path.join(args.savedir, 'pred'))
+        os.makedirs(os.path.join(args.savedir, 'input'))
+        os.makedirs(os.path.join(args.savedir, 'pred_logits'))
 
     evaluate(args, model, dataset_loader, device=device)
 

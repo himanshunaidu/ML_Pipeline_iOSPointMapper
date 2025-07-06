@@ -35,7 +35,7 @@ def get_cityscapes_num_classes(is_custom=False, custom_mapping_dict_key=None):
         assert custom_mapping_dict_key is not None, "Custom mapping dictionary key must be provided when is_custom is True."
         custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
         # Basic cases
-        if custom_mapping_dict_key == '53': return 53
+        if custom_mapping_dict_key == '53': return 20
     # else:
     return len(CITYSCAPE_CLASS_LIST)  # Default number of classes in Cityscapes without custom mapping
 

@@ -24,7 +24,7 @@ ios_point_mapper_dict = {
 }
 
 custom_mapping_dicts = {
-    'cityscapes': ios_point_mapper_to_cityscapes_dict,
+    'city': ios_point_mapper_to_cityscapes_dict,
     '53': ios_point_mapper_to_cocoStuff_custom_53_dict,
     '35': ios_point_mapper_to_cocoStuff_custom_35_dict
 }
@@ -40,6 +40,7 @@ def get_ios_point_mapper_num_classes(is_custom=False, custom_mapping_dict_key=No
         # Basic cases
         if custom_mapping_dict_key == '53': return 53
         elif custom_mapping_dict_key == '35': return 35
+        elif custom_mapping_dict_key == 'city': return 20
     # else:
     return len(ios_point_mapper_dict.keys())  # Default number of classes in iOSPointMapper without custom mapping
 
