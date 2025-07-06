@@ -11,7 +11,7 @@ from data_loader.semantic_segmentation.cocostuff_scripts.custom_maps import coco
 import numpy as np
 
 # Custom mapping dictionary for COCOStuff
-custom_mapping_dict = {
+custom_mapping_dicts = {
     '53': cocoStuff_continuous_53_dict,
     '35': cocoStuff_continuous_35_dict
 }
@@ -69,7 +69,7 @@ class COCOStuffSegmentation(data.Dataset):
         self.is_custom = is_custom
         assert not is_custom or custom_mapping_dict_key is not None, "Custom mapping dictionary should be provided when is_custom is True."
         custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
-        self.custom_mapping_dict = custom_mapping_dict[custom_mapping_dict_key]
+        self.custom_mapping_dict = custom_mapping_dicts[custom_mapping_dict_key]
 
         # class_numbers = list(self.custom_mapping_dict.values())
         # class_numbers = np.array(class_numbers)
