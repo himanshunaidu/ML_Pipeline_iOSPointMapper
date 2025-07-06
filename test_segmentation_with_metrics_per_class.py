@@ -116,10 +116,11 @@ def set_dataset_config(args: Namespace):
                     print_error_message('{} image file does not exist'.format(rgb_img_loc))
                 image_list.append(rgb_img_loc)
     elif args.dataset == 'coco_stuff':
-        from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentation
+        from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentation, get_cocoStuff_num_classes
         dataset = COCOStuffSegmentation(root_dir=args.data_path, split=args.split, is_training=False,
-                                         scale=(args.s, args.s), crop_size=args.im_size)
-        seg_classes = 19 # FIXME: Hardcoded for coco stuff dataset for now
+                                         scale=(args.s, args.s), crop_size=args.im_size,
+                                         is_custom= args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        seg_classes = get_cocoStuff_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
         exit(-1)
@@ -363,7 +364,7 @@ if __name__ == '__main__':
     parser.add_argument('--model-height', default=224, type=int, help='Model height')
     parser.add_argument('--channels', default=3, type=int, help='Input channels')
     parser.add_argument('--is-custom', default=False, type=bool, help='Use custom mapping dictionary')
-    parser.add_argument('--custom-mapping-dict', default=None, type=str, help='Custom mapping dictionary key (if any)')
+    parser.add_argument('--custom-mapping-dict-key', default=None, type=str, help='Custom mapping dictionary key (if any)')
     parser.add_argument('--num-classes', default=1000, type=int,
                         help='ImageNet classes. Required for loading the base network')
     parser.add_argument('--savedir', type=str, default='./results_segmentation_test', help='Location to save the results')
