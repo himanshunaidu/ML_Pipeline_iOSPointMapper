@@ -18,6 +18,7 @@ from utilities.print_utils import *
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from utilities.utils import model_parameters, compute_flops
 from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_TRAIN_CMAP
+import numpy as np
 
 from eval.utils import AverageMeter
 from eval.semantic_segmentation.custom_evaluation import CustomEvaluation
@@ -124,6 +125,7 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
                 custom_eval_per_class[j].update(output=img_out_processed_j, target=target_processed_j)
 
             # Save the images
+            ## Save the target as label image and if possible, as RGB image
             target_i = target_i.type(torch.ByteTensor)
             target_i_image = F.to_pil_image(target_i.cpu()*10)
             target_i_image.save(os.path.join(args.savedir, 'target', 'target_{}.png'.format(index*args.batch_size + i)))
@@ -131,6 +133,10 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
                 target_i_rgb_image = grayscale_tensor_to_rgb_tensor(target_i, cmap)
                 target_i_rgb_image = F.to_pil_image(target_i_rgb_image.cpu())
                 target_i_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index*args.batch_size + i)))
+            ## Save the output logits img_out[i] as probability array (numpy array)
+            img_out_i_array = img_out_i.squeeze(0).cpu().numpy()
+            np.save(os.path.join(args.savedir, 'pred_logits', 'pred_logits_{}.npy'.format(index*args.batch_size + i)), img_out_i_array)
+            ## Save the output as label image and if possible, as RGB image
             img_out_image = F.to_pil_image(img_out_processed.cpu()*10)
             img_out_image.save(os.path.join(args.savedir, 'pred', 'pred_{}.png'.format(index*args.batch_size + i)))
             if cmap is not None:
