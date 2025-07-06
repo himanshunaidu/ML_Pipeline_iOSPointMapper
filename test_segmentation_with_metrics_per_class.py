@@ -71,16 +71,13 @@ def set_dataset_config(args: Namespace):
     seg_classes = 0
     # read all the images in the folder
     if args.dataset == 'city':
-        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST, CityscapesSegmentation, cityscape_to_custom_cocoStuff_dict
+        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST, CityscapesSegmentation, get_cityscapes_num_classes
         from data_loader.semantic_segmentation.backup import CityscapesSegmentationTest
-        if args.is_custom and args.custom_mapping_dict is None:
-            args.custom_mapping_dict = cityscape_to_custom_cocoStuff_dict
         dataset = CityscapesSegmentation(root=args.data_path, size=args.im_size, scale=args.s,
                                              coarse=False, train=(args.split == 'train'),
                                              mean=[0, 0, 0], std=[1, 1, 1],
-                                             is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
-        seg_classes = len(CITYSCAPE_CLASS_LIST)
-        if args.is_custom: seg_classes = 53
+                                             is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        seg_classes = get_cityscapes_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
         # seg_classes = 172  # Temporarily hardcoded for edge mapping dataset with coco stuff based training
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
         from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, EDGE_MAPPING_CLASS_LIST, get_edge_mapping_num_classes
@@ -90,15 +87,12 @@ def set_dataset_config(args: Namespace):
                                             is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
         seg_classes = get_edge_mapping_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
     elif args.dataset == 'ios_point_mapper':
-        from data_loader.semantic_segmentation.ios_point_mapper import iOSPointMapperDataset, IOS_POINT_MAPPER_CLASS_LIST, ios_point_mapper_to_cocoStuff_dict
-        if args.is_custom and args.custom_mapping_dict is None:
-            args.custom_mapping_dict = ios_point_mapper_to_cocoStuff_dict
+        from data_loader.semantic_segmentation.ios_point_mapper import iOSPointMapperDataset, get_ios_point_mapper_num_classes
         dataset = iOSPointMapperDataset(root=args.data_path, train=False, scale=args.s,
                                         size=args.im_size, ignore_idx=255,
                                         mean=[0, 0, 0], std=[1, 1, 1],
-                                        is_custom=args.is_custom, custom_mapping_dict=args.custom_mapping_dict)
-        seg_classes = len(IOS_POINT_MAPPER_CLASS_LIST)
-        if args.is_custom: seg_classes = 53
+                                        is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        seg_classes = get_ios_point_mapper_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
     elif args.dataset == 'pascal':
         from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
         seg_classes = len(VOC_CLASS_LIST)

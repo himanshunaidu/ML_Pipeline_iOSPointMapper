@@ -119,7 +119,7 @@ class COCOStuffSegmentation(data.Dataset):
         mask = np.array(mask, dtype=np.uint8)
 
         ##################  For tuning on our custom data
-        if self.is_custom:
+        if self.is_custom and self.custom_mapping_dict is not None:
             new_mask = np.zeros_like(mask)
             for k, v in self.custom_mapping_dict.items():
                 new_mask[mask == k] = v

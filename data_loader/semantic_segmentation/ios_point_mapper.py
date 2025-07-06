@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose, ToTensor
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
+from data_loader.semantic_segmentation.ios_point_mapper_scripts.custom_maps import ios_point_mapper_to_cityscapes_dict, ios_point_mapper_to_cocoStuff_custom_35_dict, ios_point_mapper_to_cocoStuff_custom_53_dict
 
 IOS_POINT_MAPPER_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
@@ -22,22 +23,25 @@ ios_point_mapper_dict = {
     27: 'vegetation', 28: 'wall'
 }
 
-# Mapping from edge mapping classes to **custom** cocostuff classes
-## This customization of cocostuff classes comes from edge mapping repository
-## done to map the fewer relevant classes to a continuous range of classes
-# ios_point_mapper_to_cocoStuff_dict = {0:0, 1:2, 2:0, 3:0, 4:16, 5:5, 6:3, 7:0, 8:20, 9:0, 10:25,
-#                                       11:4, 12:0, 13:1, 14:21, 15:26, 16:1, 17:27, 18:22, 19:0, 20:0,
-#                                       21:19, 22:8, 23:10, 24:6, 25:7, 26:0, 27:15, 28:33}
+custom_mapping_dicts = {
+    'cityscapes': ios_point_mapper_to_cityscapes_dict,
+    '53': ios_point_mapper_to_cocoStuff_custom_53_dict,
+    '35': ios_point_mapper_to_cocoStuff_custom_35_dict
+}
 
-# ios_point_mapper_to_cocoStuff_dict = {0:0, 1:2, 2:0, 3:0, 4:19, 5:5, 6:3, 7:0, 8:24, 9:0, 10:0, 
-#                                       11:2, 12:0, 13:1, 14:0, 15:0, 16:1, 17:41, 18:35, 19:0, 20:0, 
-#                                       21:27, 22:8, 23:11, 24:6, 25:12, 26:0, 27:31, 28:50}
-
-ios_point_mapper_to_cocoStuff_dict = {
-    0:255, 1:18, 2:255, 3:255, 4:2, 5:15, 6:13, 7:255, 8:4, 9:255, 10:255, 11:17, 12:255,
-    13:11, 14:5, 15:255, 16:12, 17:0, 18:1, 19:10, 20:255, 21:9, 22:6, 23:7, 24:16, 25:14, 
-    26:255, 27:8, 28:3}
-
+def get_ios_point_mapper_num_classes(is_custom=False, custom_mapping_dict_key=None):
+    """
+    Returns the number of classes in the iOSPointMapper dataset.
+    If is_custom is True, it returns the number of classes based on the custom mapping dictionary.
+    """
+    if is_custom:
+        assert custom_mapping_dict_key is not None, "Custom mapping dictionary key must be provided when is_custom is True."
+        custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
+        # Basic cases
+        if custom_mapping_dict_key == '53': return 53
+        elif custom_mapping_dict_key == '35': return 35
+    # else:
+    return len(ios_point_mapper_dict.keys())  # Default number of classes in iOSPointMapper without custom mapping
 
 class iOSPointMapperDataset(data.Dataset):
     """
@@ -49,7 +53,7 @@ class iOSPointMapperDataset(data.Dataset):
 
     def __init__(self, root, train=False, scale=(0.5, 2.0), size=(1024, 512), ignore_idx=255,
                  *, mean=MEAN, std=STD,
-                 is_custom=False, custom_mapping_dict=None):
+                 is_custom=False, custom_mapping_dict_key=None):
         """
         Initialize the dataset class.
 
@@ -105,8 +109,9 @@ class iOSPointMapperDataset(data.Dataset):
         self.ignore_idx = ignore_idx
 
         self.is_custom = is_custom
-        assert not is_custom or custom_mapping_dict is not None, "Custom mapping dictionary should be provided when is_custom is True."
-        self.custom_mapping_dict = custom_mapping_dict
+        assert not is_custom or custom_mapping_dict_key is not None, "Custom mapping dictionary should be provided when is_custom is True."
+        custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
+        self.custom_mapping_dict = custom_mapping_dicts[custom_mapping_dict_key] if custom_mapping_dict_key in custom_mapping_dicts else None
 
     def transforms(self):
         train_transforms = Compose(
@@ -147,7 +152,7 @@ class iOSPointMapperDataset(data.Dataset):
         mask = np.array(mask, dtype=np.uint8)
 
         ##################  For tuning on our custom data
-        if self.is_custom:
+        if self.is_custom and self.custom_mapping_dict is not None:
             new_mask = np.zeros_like(mask)
             for k, v in self.custom_mapping_dict.items():
                 new_mask[mask == k] = v
