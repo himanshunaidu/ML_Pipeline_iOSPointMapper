@@ -19,11 +19,15 @@ CITYSCAPE_TRAIN_CMAP = {
 # Mapping from cityscapes classes to **custom** cocostuff classes
 ## This customization of cocostuff classes comes from edge mapping repository
 ## done to map the fewer relevant classes to a continuous range of classes
-cityscape_to_custom_cocoStuff_dict = {0:41, 1:35, 2:19, 3:50, 4:24, 5:0, 6:8, 7:11, 8:31, 9:27,
+cityscape_to_custom_cocoStuff_53_dict = {0:41, 1:35, 2:19, 3:50, 4:24, 5:0, 6:8, 7:11, 8:31, 9:27,
                             10:0, 11:1, 12:1, 13:3, 14:12, 15:5, 16:6, 17:2, 18:2, 19:0}
 
+cityscapes_to_custom_cocoStuff_35_dict = {0:27, 1:22, 2:16, 3:33, 4:20, 5:21, 6:8, 7:10, 8:15, 9:19,
+                            10:0, 11:1, 12:1, 13:3, 14:7, 15:5, 16:6, 17:4, 18:2, 19:0}
+
 custom_mapping_dicts = {
-    '53': cityscape_to_custom_cocoStuff_dict
+    '53': cityscape_to_custom_cocoStuff_53_dict,
+    '35': cityscapes_to_custom_cocoStuff_35_dict
 }
 
 def get_cityscapes_num_classes(is_custom=False, custom_mapping_dict_key=None):
@@ -35,7 +39,8 @@ def get_cityscapes_num_classes(is_custom=False, custom_mapping_dict_key=None):
         assert custom_mapping_dict_key is not None, "Custom mapping dictionary key must be provided when is_custom is True."
         custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
         # Basic cases
-        if custom_mapping_dict_key == '53': return 20
+        if custom_mapping_dict_key == '53': return 53
+        elif custom_mapping_dict_key == '35': return 35
     # else:
     return len(CITYSCAPE_CLASS_LIST)  # Default number of classes in Cityscapes without custom mapping
 

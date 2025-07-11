@@ -225,8 +225,8 @@ def save_images(args: Namespace, input, target, output_prob, output, index, cmap
 
     # Save the output probabilities as numpy array
     ## First convert to numpy array
-    output_prob = output_prob.cpu().detach().numpy()
-    np.save(os.path.join(args.savedir, 'pred_logits', 'pred_logits_{}.npy'.format(index)), output_prob)
+    # output_prob = output_prob.cpu().detach().numpy()
+    # np.save(os.path.join(args.savedir, 'pred_logits', 'pred_logits_{}.npy'.format(index)), output_prob)
     
     # Save the output image
     output = output.type(torch.ByteTensor)
@@ -245,10 +245,10 @@ def evaluate(args, model, dataset_loader: torch.utils.data.DataLoader, device):
     custom_eval = CustomEvaluation(num_classes=args.classes, max_regions=1024, is_output_probabilities=True, 
                                    idToClassMap=cityscapesIdToClassMap, args=args)
     
-    eval_classes = [i for i in range(args.classes)]
+    # eval_classes = [i for i in range(args.classes)]
     # eval_classes = [22, 16, 10, 8, 21] # sidewalk, building, traffic sign, traffic light, pole
     # eval_classes = [35, 19, 11, 8, 0] # sidewalk, building, traffic sign, traffic light, pole
-    # eval_classes = [1, 2, 7, 6, 5]
+    eval_classes = [1, 2, 7, 6, 5]
     # Also get custom evaluation metrics per class
     # This will take in non-probability outputs to make the evaluation easier
     custom_eval_per_class = {
@@ -367,7 +367,7 @@ if __name__ == '__main__':
     # input details
     parser.add_argument('--im-size', type=int, nargs="+", default=[512, 256], help='Image size for testing (W x H)')
     parser.add_argument('--split', default='val', choices=['train', 'val', 'test'], help='data split')
-    parser.add_argument('--batch-size', type=int, default=4, help='list of batch sizes')
+    parser.add_argument('--batch-size', type=int, default=1, help='list of batch sizes')
     parser.add_argument('--model-width', default=224, type=int, help='Model width')
     parser.add_argument('--model-height', default=224, type=int, help='Model height')
     parser.add_argument('--channels', default=3, type=int, help='Input channels')
