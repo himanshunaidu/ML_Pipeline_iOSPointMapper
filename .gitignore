@@ -1,5 +1,5 @@
 # Package Specific
-command
+command*
 analyze.py
 
 ## Data Loader
@@ -7,6 +7,8 @@ analyze.py
 /datasets/
 /eval/dump/
 /train/dump/
+backup/
+*.zip
 
 ## Model
 /model/semantic_segmentation/model_zoo/*/*.pth
@@ -25,6 +27,7 @@ analyze.py
 /edge_device/semantic_segmentation/model_zoo/*
 
 ## Results
+results*
 /results/*
 !/results/.gitkeep
 /results_segmentation/*

@@ -19,14 +19,36 @@ CITYSCAPE_TRAIN_CMAP = {
 # Mapping from cityscapes classes to **custom** cocostuff classes
 ## This customization of cocostuff classes comes from edge mapping repository
 ## done to map the fewer relevant classes to a continuous range of classes
-cityscape_to_custom_cocoStuff_dict = {0:41, 1:35, 2:19, 3:50, 4:24, 5:0, 6:8, 7:11, 8:31, 9:27,
+cityscape_to_custom_cocoStuff_53_dict = {0:41, 1:35, 2:19, 3:50, 4:24, 5:0, 6:8, 7:11, 8:31, 9:27,
                             10:0, 11:1, 12:1, 13:3, 14:12, 15:5, 16:6, 17:2, 18:2, 19:0}
+
+cityscapes_to_custom_cocoStuff_35_dict = {0:27, 1:22, 2:16, 3:33, 4:20, 5:21, 6:8, 7:10, 8:15, 9:19,
+                            10:0, 11:1, 12:1, 13:3, 14:7, 15:5, 16:6, 17:4, 18:2, 19:0}
+
+custom_mapping_dicts = {
+    '53': cityscape_to_custom_cocoStuff_53_dict,
+    '35': cityscapes_to_custom_cocoStuff_35_dict
+}
+
+def get_cityscapes_num_classes(is_custom=False, custom_mapping_dict_key=None):
+    """
+    Returns the number of classes in the Cityscapes dataset.
+    If is_custom is True, it returns the number of classes based on the custom mapping dictionary.
+    """
+    if is_custom:
+        assert custom_mapping_dict_key is not None, "Custom mapping dictionary key must be provided when is_custom is True."
+        custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
+        # Basic cases
+        if custom_mapping_dict_key == '53': return 53
+        elif custom_mapping_dict_key == '35': return 35
+    # else:
+    return len(CITYSCAPE_CLASS_LIST)  # Default number of classes in Cityscapes without custom mapping
 
 class CityscapesSegmentation(data.Dataset):
 
     def __init__(self, root, train=True, scale=(0.5, 2.0), size=(1024, 512), ignore_idx=255, coarse=True,
                  *, mean=MEAN, std=STD,
-                 is_custom=False, custom_mapping_dict=None):
+                 is_custom=False, custom_mapping_dict_key=None):
         """
         Note: The split argument was added only recently. Will need to be incorporated more properly. 
         """
@@ -80,8 +102,9 @@ class CityscapesSegmentation(data.Dataset):
         self.ignore_idx = ignore_idx
 
         self.is_custom = is_custom
-        assert not is_custom or custom_mapping_dict is not None, "Custom mapping dictionary should be provided when is_custom is True."
-        self.custom_mapping_dict = custom_mapping_dict
+        assert not is_custom or custom_mapping_dict_key is not None, "Custom mapping dictionary should be provided when is_custom is True."
+        custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
+        self.custom_mapping_dict = custom_mapping_dicts[custom_mapping_dict_key] if custom_mapping_dict_key in custom_mapping_dicts else None
 
     def transforms(self):
         train_transforms = Compose(
@@ -122,7 +145,7 @@ class CityscapesSegmentation(data.Dataset):
         mask = np.array(mask, dtype=np.uint8)
 
         ##################  For tuning on our custom data
-        if self.is_custom:
+        if self.is_custom and self.custom_mapping_dict is not None:
             new_mask = np.zeros_like(mask)
             for k, v in self.custom_mapping_dict.items():
                 new_mask[mask == k] = v
@@ -139,9 +162,9 @@ class CityscapesSegmentationForAccessibility(CityscapesSegmentation):
     """
     def __init__(self, root, train=True, scale=(0.5, 2.0), size=(512, 512), ignore_idx=255, coarse=True,
                  *, mean=MEAN, std=STD,
-                 is_custom=False, custom_mapping_dict=None):
+                 is_custom=False, custom_mapping_dict_key=None):
         super().__init__(root, train, scale, size, ignore_idx, coarse, mean=mean, std=std,
-                         is_custom=is_custom, custom_mapping_dict=custom_mapping_dict)
+                         is_custom=is_custom, custom_mapping_dict_key=custom_mapping_dict_key)
 
     def __len__(self):
         # Return twice the number of images for accessibility focus

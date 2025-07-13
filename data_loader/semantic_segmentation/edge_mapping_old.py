@@ -6,30 +6,16 @@ import numpy as np
 import pandas as pd
 from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose, ToTensor
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
-from data_loader.semantic_segmentation.edge_mapping_scripts.custom_maps import edge_mapping_to_cocoStuff_custom_53_dict, edge_mapping_to_cocoStuff_custom_35_dict
 
 EDGE_MAPPING_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
                         'bicycle', 'background']
 
-custom_mapping_dicts = {
-    '53': edge_mapping_to_cocoStuff_custom_53_dict,
-    '35': edge_mapping_to_cocoStuff_custom_35_dict
-}
-
-def get_edge_mapping_num_classes(is_custom=False, custom_mapping_dict_key=None):
-    """
-    Returns the number of classes in the Edge Mapping dataset.
-    If is_custom is True, it returns the number of classes based on the custom mapping dictionary.
-    """
-    if is_custom:
-        assert custom_mapping_dict_key is not None, "Custom mapping dictionary key must be provided when is_custom is True."
-        custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
-        # Basic cases
-        if custom_mapping_dict_key == '53': return 53
-        elif custom_mapping_dict_key == '35': return 35
-    # else:
-    return 20  # Default number of classes in Edge Mapping without custom mapping
+# Mapping from edge mapping classes to **custom** cocostuff classes
+## This customization of cocostuff classes comes from edge mapping repository
+## done to map the fewer relevant classes to a continuous range of classes
+edge_mapping_to_custom_cocoStuff_dict = {0:41, 1:35, 2:19, 3:50, 4:24, 5:0, 6:8, 7:11, 8:31, 9:27,
+                            10:0, 11:1, 12:1, 13:3, 14:12, 15:5, 16:6, 17:2, 18:2, 19:0}
 
 class EdgeMappingSegmentation(data.Dataset):
     """
@@ -41,7 +27,7 @@ class EdgeMappingSegmentation(data.Dataset):
 
     def __init__(self, root, train=False, scale=(0.5, 2.0), size=(1024, 512), ignore_idx=255,
                  *, mean=MEAN, std=STD,
-                 is_custom=False, custom_mapping_dict_key=None):
+                 is_custom=False, custom_mapping_dict=None):
         """
         Initialize the dataset class.
 
@@ -97,9 +83,8 @@ class EdgeMappingSegmentation(data.Dataset):
         self.ignore_idx = ignore_idx
 
         self.is_custom = is_custom
-        assert not is_custom or custom_mapping_dict_key is not None, "Custom mapping dictionary should be provided when is_custom is True."
-        custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
-        self.custom_mapping_dict = custom_mapping_dicts[custom_mapping_dict_key] if custom_mapping_dict_key in custom_mapping_dicts else None
+        assert not is_custom or custom_mapping_dict is not None, "Custom mapping dictionary should be provided when is_custom is True."
+        self.custom_mapping_dict = custom_mapping_dict
 
     def transforms(self):
         train_transforms = Compose(
@@ -140,7 +125,7 @@ class EdgeMappingSegmentation(data.Dataset):
         mask = np.array(mask, dtype=np.uint8)
 
         ##################  For tuning on our custom data
-        if self.is_custom and self.custom_mapping_dict is not None:
+        if self.is_custom:
             new_mask = np.zeros_like(mask)
             for k, v in self.custom_mapping_dict.items():
                 new_mask[mask == k] = v

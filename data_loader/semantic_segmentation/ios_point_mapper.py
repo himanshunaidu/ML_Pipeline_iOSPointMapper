@@ -6,20 +6,32 @@ import numpy as np
 import pandas as pd
 from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose, ToTensor
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
-from data_loader.semantic_segmentation.edge_mapping_scripts.custom_maps import edge_mapping_to_cocoStuff_custom_53_dict, edge_mapping_to_cocoStuff_custom_35_dict
+from data_loader.semantic_segmentation.ios_point_mapper_scripts.custom_maps import ios_point_mapper_to_cityscapes_dict, ios_point_mapper_to_cocoStuff_custom_35_dict, ios_point_mapper_to_cocoStuff_custom_53_dict
 
-EDGE_MAPPING_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
+IOS_POINT_MAPPER_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
                         'bicycle', 'background']
 
-custom_mapping_dicts = {
-    '53': edge_mapping_to_cocoStuff_custom_53_dict,
-    '35': edge_mapping_to_cocoStuff_custom_35_dict
+ios_point_mapper_dict = {
+    0: 'background', 1: 'bicycle', 2: 'bike rack', 3: 'bridge', 4: 'building',
+    5: 'bus', 6: 'car', 7: 'dynamic', 8: 'fence', 9: 'ground',
+    10: 'guard rail', 11: 'motorcycle', 12: 'parking', 13: 'person',
+    14: 'pole', 15: 'rail track', 16: 'rider', 17: 'road',
+    18: 'sidewalk', 19: 'sky', 20: 'static',
+    21: 'terrain', 22: 'traffic light', 23: 'traffic sign',
+    24: 'train', 25: 'truck', 26: 'tunnel',
+    27: 'vegetation', 28: 'wall'
 }
 
-def get_edge_mapping_num_classes(is_custom=False, custom_mapping_dict_key=None):
+custom_mapping_dicts = {
+    'city': ios_point_mapper_to_cityscapes_dict,
+    '53': ios_point_mapper_to_cocoStuff_custom_53_dict,
+    '35': ios_point_mapper_to_cocoStuff_custom_35_dict
+}
+
+def get_ios_point_mapper_num_classes(is_custom=False, custom_mapping_dict_key=None):
     """
-    Returns the number of classes in the Edge Mapping dataset.
+    Returns the number of classes in the iOSPointMapper dataset.
     If is_custom is True, it returns the number of classes based on the custom mapping dictionary.
     """
     if is_custom:
@@ -28,10 +40,11 @@ def get_edge_mapping_num_classes(is_custom=False, custom_mapping_dict_key=None):
         # Basic cases
         if custom_mapping_dict_key == '53': return 53
         elif custom_mapping_dict_key == '35': return 35
+        elif custom_mapping_dict_key == 'city': return 20
     # else:
-    return 20  # Default number of classes in Edge Mapping without custom mapping
+    return len(ios_point_mapper_dict.keys())  # Default number of classes in iOSPointMapper without custom mapping
 
-class EdgeMappingSegmentation(data.Dataset):
+class iOSPointMapperDataset(data.Dataset):
     """
     Dataset class for Edge Mapping dataset.
     
@@ -149,7 +162,7 @@ class EdgeMappingSegmentation(data.Dataset):
         return Image.fromarray(mask)
 
 
-class EdgeMappingSegmentationTest(data.Dataset):
+class iOSPointMapperDatasetTest(data.Dataset):
     """
     Dataset class for Edge Mapping dataset (test version).
     
