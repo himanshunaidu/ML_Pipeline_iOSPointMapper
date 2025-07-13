@@ -16,5 +16,12 @@
   "classes": 19,
   "savedir": "./results_segmentation_test",
   "eval_classes": [1, 2, 7, 6, 5],
-  "eval_classes_names": ["sidewalk", "building", "traffic sign", "traffic light", "pole"]
+  "eval_classes_names": ["sidewalk", "building", "traffic sign", "traffic light", "pole"],
+  "cmap": {
+    "1": [244, 35, 232],
+    "2": [70, 70, 70],
+    "7": [220, 220, 0],
+    "6": [250, 170, 30],
+    "5": [153, 153, 153]
+  }
 }

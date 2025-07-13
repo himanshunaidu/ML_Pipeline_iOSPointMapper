@@ -30,7 +30,7 @@ from eval.utils import AverageMeter
 from eval.semantic_segmentation.custom_evaluation import CustomEvaluation
 from eval.semantic_segmentation.metrics.old.persello import cityscapesIdToClassMap
 
-def preprocess_inputs(output, target, is_output_probabilities=True):
+def preprocess_inputs(output, target, is_output_probabilities=True) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Preprocess the output and target tensors to get the predictions and ground truth.
     """
@@ -56,8 +56,13 @@ def data_transform(input, mean, std):
     input = F.normalize(input, mean, std)  # normalize the tensor
     return input
 
+def unnormalize(tensor, mean, std) -> torch.Tensor:
+    mean = torch.tensor(mean).to(tensor.device).view(-1, 1, 1)
+    std = torch.tensor(std).to(tensor.device).view(-1, 1, 1)
+    return tensor * std + mean
+
 def test(args: TestConfig, model, dataset_loader: torch.utils.data.DataLoader, device):
-    cmap = get_cmap(args)   
+    args.cmap = get_cmap(args)   
 
     custom_eval = CustomEvaluation(num_classes=args.classes, max_regions=1024, is_output_probabilities=True, 
                                    idToClassMap=cityscapesIdToClassMap, args=args)
@@ -100,13 +105,14 @@ def test(args: TestConfig, model, dataset_loader: torch.utils.data.DataLoader, d
                 custom_eval_per_class[j].update(output=img_out_processed_j, target=target_processed_j)
 
             # Save the images
-            input_i_save = input_i.squeeze(0)
+            input_i_save = unnormalize(input_i, args.mean, args.std).squeeze(0)
             target_i_save = target_i.squeeze(0)
             img_out_i_save = img_out_i.squeeze(0)
             img_out_processed_save = img_out_processed.squeeze(0)
             # print("Shapes: input {}, target {}, output {}, output processed {}".format(
             #     input_i_save.shape, target_i_save.shape, img_out_i_save.shape, img_out_processed_save.shape))
-            save_images(args, input_i_save, target_i_save, img_out_i_save, img_out_processed_save, index*args.batch_size + i, cmap=cmap)
+            save_images(args, input_i_save, target_i_save, img_out_i_save, img_out_processed_save, 
+                        index*args.batch_size + i, cmap=args.cmap)
 
     # Get the metrics
     save_object = custom_eval.get_results()
@@ -121,6 +127,69 @@ def test(args: TestConfig, model, dataset_loader: torch.utils.data.DataLoader, d
             json.dump(save_object_per_class, f)
             f.write('\n')
     print_info_message('Metrics saved to {}'.format(save_path))
+
+def recolor_images(args: TestConfig):
+    input_dir = os.path.join(args.savedir, 'input')
+    pred_dir = os.path.join(args.savedir, 'pred')
+    pred_rgb_dir = os.path.join(args.savedir, 'pred_rgb')
+    target_dir = os.path.join(args.savedir, 'target')
+    target_rgb_dir = os.path.join(args.savedir, 'target_rgb')
+    
+    combined_dir = os.path.join(args.savedir, 'combined')
+    if not os.path.exists(combined_dir): os.makedirs(combined_dir)
+    
+    cmap = args.cmap
+    if cmap is None:
+        print_error_message('Color map is not provided in the config. Please check the config file.')
+        return
+    target_classes = args.eval_classes
+    if target_classes is None:
+        print_error_message('Target classes are not provided in the config. Please check the config file.')
+        return
+    
+    for pred_file_name in tqdm(os.listdir(pred_dir), desc="Recoloring images and saving as combined image for visualization"):
+        if not pred_file_name.endswith('.png'):
+            continue
+        if 'rgb' in pred_file_name or 'target' in pred_file_name:
+            continue
+        target_file_name = pred_file_name.replace('pred', 'target')
+        
+        # Load predicted mask
+        pred_mask = np.array(Image.open(os.path.join(pred_dir, pred_file_name)))  # shape: [H, W]
+        
+        # Load corresponding ground truth mask
+        gt_mask = np.array(Image.open(os.path.join(target_dir, target_file_name)))  # shape: [H, W]
+        
+        # Create a mask that only contains the target classes
+        pred_mask_target = np.isin(pred_mask, target_classes).astype(np.uint8)
+        gt_mask_target = np.isin(gt_mask, target_classes).astype(np.uint8)
+        
+        # Create RGB images for visualization
+        pred_rgb = np.zeros((*pred_mask.shape, 3), dtype=np.uint8)
+        gt_rgb = np.zeros((*gt_mask.shape, 3), dtype=np.uint8)
+        
+        for i, class_id in enumerate(target_classes):
+            pred_rgb[pred_mask == class_id] = cmap[class_id]
+            gt_rgb[gt_mask == class_id] = cmap[class_id]
+        
+        # Save RGB images
+        Image.fromarray(pred_rgb, mode='RGB').save(os.path.join(pred_rgb_dir, pred_file_name))
+        Image.fromarray(gt_rgb, mode='RGB').save(os.path.join(target_rgb_dir, target_file_name))
+        
+        input_file_name = pred_file_name.replace('pred', 'input')
+        input_image = Image.open(os.path.join(input_dir, input_file_name))
+        # Resize input image to match the prediction size
+        input_image = input_image.resize(pred_mask.shape[::-1], Image.BILINEAR)
+
+        # Combine input, target, and prediction for visualization
+        combined_image = Image.new('RGB', (input_image.width * 3, input_image.height))
+        combined_image.paste(input_image, (0, 0))
+        combined_image.paste(Image.fromarray(gt_rgb, mode='RGB'), (input_image.width, 0))
+        combined_image.paste(Image.fromarray(pred_rgb, mode='RGB'), (input_image.width * 2, 0))
+        combined_image.save(os.path.join(combined_dir, pred_file_name.replace('pred', 'combined')))
+    
+    print("Recoloring and saving images completed. Combined images are saved in: {}".format(combined_dir))
+    return  # This function is not implemented in the provided code snippet
 
 def main(args: TestConfig):
     dataset, seg_classes, mean, std = get_dataset_config(args)
@@ -154,7 +223,7 @@ def main(args: TestConfig):
     prepare_save_images(args)
     
     test(args, model, dataset_loader, device=device)
-
+    recolor_images(args)
 
 if __name__ == '__main__':
     from config.general_details import segmentation_models, segmentation_datasets

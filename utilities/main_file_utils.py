@@ -6,8 +6,9 @@ import os
 import numpy as np
 from typing import Optional, List, Tuple
 import torch
-import torch.nn.functional as F
+
 from torch import nn
+from torchvision.transforms import functional as F
 from torch.utils import data
 
 from utilities.print_utils import *
@@ -128,6 +129,8 @@ def get_model_config(args: TestConfig, seg_classes: int = 0, mean=None, std=None
     return model
 
 def get_cmap(args: TestConfig):
+    if args.cmap is not None:
+        return args.cmap
     from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_TRAIN_CMAP
     if args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper':
         cmap = CITYSCAPE_TRAIN_CMAP
@@ -144,6 +147,8 @@ def prepare_save_images(args: TestConfig):
         os.makedirs(args.savedir)
         os.makedirs(os.path.join(args.savedir, 'target'))
         os.makedirs(os.path.join(args.savedir, 'pred'))
+        os.makedirs(os.path.join(args.savedir, 'target_rgb'))
+        os.makedirs(os.path.join(args.savedir, 'pred_rgb'))
         os.makedirs(os.path.join(args.savedir, 'input'))
         os.makedirs(os.path.join(args.savedir, 'pred_logits'))
 
@@ -187,7 +192,7 @@ def save_images(args: TestConfig, input, target, output_prob, output, index, cma
     if cmap is not None:
         target_rgb_image = grayscale_tensor_to_rgb_tensor(target.unsqueeze(0), cmap)
         target_rgb_image = F.to_pil_image(target_rgb_image.cpu())
-        target_rgb_image.save(os.path.join(args.savedir, 'target', 'target_rgb_{}.png'.format(index)))
+        target_rgb_image.save(os.path.join(args.savedir, 'target_rgb', 'target_rgb_{}.png'.format(index)))
 
     # Save the output probabilities as numpy array
     ## First convert to numpy array
@@ -202,4 +207,4 @@ def save_images(args: TestConfig, input, target, output_prob, output, index, cma
     if cmap is not None:
         output_rgb_image = grayscale_tensor_to_rgb_tensor(output.unsqueeze(0), cmap)
         output_rgb_image = F.to_pil_image(output_rgb_image.cpu())
-        output_rgb_image.save(os.path.join(args.savedir, 'pred', 'pred_rgb_{}.png'.format(index)))
+        output_rgb_image.save(os.path.join(args.savedir, 'pred_rgb', 'pred_rgb_{}.png'.format(index)))
