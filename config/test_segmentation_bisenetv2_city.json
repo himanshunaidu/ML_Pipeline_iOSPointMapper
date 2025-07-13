@@ -14,5 +14,7 @@
   "is_custom": false,
   "custom_mapping_dict_key": null,
   "classes": 19,
-  "savedir": "./results_segmentation_test"
+  "savedir": "./results_segmentation_test",
+  "eval_classes": [1, 2, 7, 6, 5],
+  "eval_classes_names": ["sidewalk", "building", "traffic sign", "traffic light", "pole"]
 }

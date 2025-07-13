@@ -36,3 +36,7 @@ class TestConfig(BaseModel):
     classes: Optional[int] = Field(default=None, description='Number of classes for the model')
     mean: Optional[List[float]] = Field(default=None, description='Mean values for normalization')
     std: Optional[List[float]] = Field(default=None, description='Standard deviation values for normalization')
+    
+    # Evaluation
+    eval_classes: Optional[List[int]] = Field(default=None, description='List of classes for evaluation')
+    save_output_probabilities: bool = Field(default=False, description='Whether to save output probabilities')
