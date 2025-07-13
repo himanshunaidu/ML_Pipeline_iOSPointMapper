@@ -79,91 +79,74 @@ def set_save_dir(args: TestConfig):
         args.savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
+        exit(-1)
 
 def set_dataset_config(args: TestConfig):
     dataset = None
     seg_classes = 0
+    mean, std = None, None
     # read all the images in the folder
     if args.dataset == 'city':
-        from data_loader.semantic_segmentation.cityscapes import CITYSCAPE_CLASS_LIST, CityscapesSegmentation, get_cityscapes_num_classes
+        from data_loader.semantic_segmentation.cityscapes import CityscapesSegmentation, get_cityscapes_num_classes, get_cityscapes_mean_std
         from data_loader.semantic_segmentation.backup import CityscapesSegmentationTest
         dataset = CityscapesSegmentation(root=args.data_path, size=args.im_size, scale=args.s,
                                              coarse=False, train=(args.split == 'train'),
                                              mean=[0, 0, 0], std=[1, 1, 1],
                                              is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
         seg_classes = get_cityscapes_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        mean, std = get_cityscapes_mean_std()
         # seg_classes = 172  # Temporarily hardcoded for edge mapping dataset with coco stuff based training
+    elif args.dataset == 'coco_stuff':
+        from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentation, get_cocoStuff_num_classes, get_cocoStuff_mean_std
+        dataset = COCOStuffSegmentation(root_dir=args.data_path, split=args.split, is_training=False,
+                                         scale=(args.s, args.s), crop_size=args.im_size,
+                                         is_custom= args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        seg_classes = get_cocoStuff_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        mean, std = get_cocoStuff_mean_std()
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-        from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, EDGE_MAPPING_CLASS_LIST, get_edge_mapping_num_classes
+        from data_loader.semantic_segmentation.edge_mapping import EdgeMappingSegmentation, get_edge_mapping_num_classes, get_edge_mapping_mean_std
         dataset = EdgeMappingSegmentation(root=args.data_path, train=False, scale=args.s, 
                                           size=args.im_size, ignore_idx=255,
                                             mean=[0, 0, 0], std=[1, 1, 1],
                                             is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
         seg_classes = get_edge_mapping_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        mean, std = get_edge_mapping_mean_std()
     elif args.dataset == 'ios_point_mapper':
-        from data_loader.semantic_segmentation.ios_point_mapper import iOSPointMapperDataset, get_ios_point_mapper_num_classes
+        from data_loader.semantic_segmentation.ios_point_mapper import iOSPointMapperDataset, get_ios_point_mapper_num_classes, get_ios_point_mapper_mean_std
         dataset = iOSPointMapperDataset(root=args.data_path, train=False, scale=args.s,
                                         size=args.im_size, ignore_idx=255,
                                         mean=[0, 0, 0], std=[1, 1, 1],
                                         is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
         seg_classes = get_ios_point_mapper_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        mean, std = get_ios_point_mapper_mean_std()
     elif args.dataset == 'pascal':
-        from data_loader.semantic_segmentation.voc import VOC_CLASS_LIST
-        seg_classes = len(VOC_CLASS_LIST)
-        data_file = os.path.join(args.data_path, 'VOC2012', 'list', '{}.txt'.format(args.split))
-        if not os.path.isfile(data_file):
-            print_error_message('{} file does not exist'.format(data_file))
-        image_list = []
-        with open(data_file, 'r') as lines:
-            for line in lines:
-                rgb_img_loc = '{}/{}/{}'.format(args.data_path, 'VOC2012', line.split()[0])
-                if not os.path.isfile(rgb_img_loc):
-                    print_error_message('{} image file does not exist'.format(rgb_img_loc))
-                image_list.append(rgb_img_loc)
-    elif args.dataset == 'coco_stuff':
-        from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentation, get_cocoStuff_num_classes
-        dataset = COCOStuffSegmentation(root_dir=args.data_path, split=args.split, is_training=False,
-                                         scale=(args.s, args.s), crop_size=args.im_size,
-                                         is_custom= args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
-        seg_classes = get_cocoStuff_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        print_error_message('Pascal dataset not yet supported in this script')
+        exit(-1)
     else:
         print_error_message('{} dataset not yet supported'.format(args.dataset))
         exit(-1)
-    return dataset, seg_classes
+    return dataset, seg_classes, mean, std
 
-def set_model_config(args: TestConfig, seg_classes: int = 0):
+def set_model_config(args: TestConfig, seg_classes: int = 0, mean=None, std=None):
+    args.classes = args.classes if args.classes is not None else seg_classes
+    args.mean = args.mean if args.mean is not None else mean
+    args.std = args.std if args.std is not None else std
+    if args.mean is None or args.std is None:
+        print_error_message('Mean and std values are not set. Please check the dataset configuration.')
+        exit(-1)
     if args.model == 'espnetv2':
         from model.semantic_segmentation.espnetv2.espnetv2 import espnetv2_seg
-        args.classes = seg_classes
         model = espnetv2_seg(args)
-        args.mean = MEAN
-        args.std = STD
     elif args.model == 'bisenetv2':
         from model.semantic_segmentation.bisenetv2.bisenetv2 import BiSeNetV2
-        seg_classes = seg_classes - 1 if ((args.dataset == 'city' or args.dataset == 'edge_mapping') and not args.is_custom) else seg_classes # Because the background class is not used in the model
-        # seg_classes = seg_classes - 1 if (args.dataset == 'ios_point_mapper') else seg_classes # Temporary
-        args.classes = seg_classes
         model = BiSeNetV2(n_classes=args.classes, aux_mode='eval')
-        if args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper':
-            args.mean = (0.3257, 0.3690, 0.3223)
-            args.std = (0.2112, 0.2148, 0.2115)
-        elif args.dataset == 'coco_stuff':
-            args.mean = (0.46962251, 0.4464104,  0.40718787)
-            args.std = (0.27469736, 0.27012361, 0.28515933)
-        else:
-            args.mean = MEAN
-            args.std = STD
     else:
         print_error_message('{} network not yet supported'.format(args.model))
         exit(-1)
     return model
 
 def get_cmap(args: TestConfig):
-    # get color map for pascal dataset
-    if args.dataset == 'pascal':
-        from utilities.color_map import VOCColormap
-        cmap = VOCColormap().get_color_map_voc()
-    elif args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper':
+    if args.dataset == 'city' or args.dataset == 'edge_mapping' or args.dataset == 'ios_point_mapper':
         cmap = CITYSCAPE_TRAIN_CMAP
     else:
         cmap = None
@@ -327,15 +310,15 @@ def evaluate(args: TestConfig, model, dataset_loader: torch.utils.data.DataLoade
     print_info_message('Metrics saved to {}'.format(save_path))
 
 def main(args: TestConfig):
-    dataset, seg_classes = set_dataset_config(args)
+    dataset, seg_classes, mean, std = set_dataset_config(args)
 
     # Get a subset of the dataset
-    # dataset = torch.utils.data.Subset(dataset, range(100))
+    dataset = torch.utils.data.Subset(dataset, range(10))
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                                              pin_memory=True, num_workers=args.workers)
     print_info_message('Number of images in the dataset: {}'.format(len(dataset_loader.dataset)))
 
-    model = set_model_config(args, seg_classes=seg_classes)
+    model = set_model_config(args, seg_classes=seg_classes, mean=mean, std=std)
 
     # model information
     num_params = model_parameters(model)

@@ -31,6 +31,14 @@ def get_edge_mapping_num_classes(is_custom=False, custom_mapping_dict_key=None):
     # else:
     return 20  # Default number of classes in Edge Mapping without custom mapping
 
+def get_edge_mapping_mean_std():
+    """
+    Returns the mean and standard deviation values for Edge Mapping dataset.
+    """
+    mean = (0.3257, 0.3690, 0.3223)
+    std = (0.2112, 0.2148, 0.2115)
+    return mean, std
+
 class EdgeMappingSegmentation(data.Dataset):
     """
     Dataset class for Edge Mapping dataset.

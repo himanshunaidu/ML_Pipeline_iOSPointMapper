@@ -44,6 +44,28 @@ def get_cityscapes_num_classes(is_custom=False, custom_mapping_dict_key=None):
     # else:
     return len(CITYSCAPE_CLASS_LIST)  # Default number of classes in Cityscapes without custom mapping
 
+def get_cityscapes_mean_std():
+    """
+    Returns the mean and standard deviation values for Cityscapes dataset.
+    """
+    mean = (0.3257, 0.3690, 0.3223)
+    std = (0.2112, 0.2148, 0.2115)
+    return mean, std
+
+def get_cityscapes_num_classes(is_custom=False, custom_mapping_dict_key=None):
+    """
+    Returns the number of classes in the Cityscapes dataset.
+    If is_custom is True, it returns the number of classes based on the custom mapping dictionary.
+    """
+    if is_custom:
+        assert custom_mapping_dict_key is not None, "Custom mapping dictionary key must be provided when is_custom is True."
+        custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
+        # Basic cases
+        if custom_mapping_dict_key == '53': return 53
+        elif custom_mapping_dict_key == '35': return 35
+    # else:
+    return len(CITYSCAPE_CLASS_LIST)  # Default number of classes in Cityscapes without custom mapping
+
 class CityscapesSegmentation(data.Dataset):
 
     def __init__(self, root, train=True, scale=(0.5, 2.0), size=(1024, 512), ignore_idx=255, coarse=True,

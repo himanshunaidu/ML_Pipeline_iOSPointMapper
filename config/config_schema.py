@@ -28,7 +28,7 @@ class TestConfig(BaseModel):
     custom_mapping_dict_key: Optional[str] = Field(default=None, description='Key for custom mapping dictionary')
 
     # Output details
-    num_classes: int = Field(default=19, description='Number of output classes')
+    # num_classes: int = Field(default=19, description='Number of output classes')
     savedir: str = Field(default='./results_segmentation_test', description='Save directory for results')
     
     # Weights, classes, mean and std

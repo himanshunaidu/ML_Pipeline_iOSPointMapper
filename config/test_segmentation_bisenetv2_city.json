@@ -13,6 +13,6 @@
   "channels": 3,
   "is_custom": false,
   "custom_mapping_dict_key": null,
-  "num_classes": 19,
+  "classes": 19,
   "savedir": "./results_segmentation_test"
 }
