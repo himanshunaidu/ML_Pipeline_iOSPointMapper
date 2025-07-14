@@ -69,62 +69,62 @@ for target_class in target_classes:
         f.write("\n")
     
     # Lists to collect predictions and ground truth
-    # all_probs = []
-    # all_targets = []
+    all_probs = []
+    all_targets = []
 
-    # for softmax_file_name in os.listdir(softmax_dir):
-    #     if not softmax_file_name.endswith('.npy'):
-    #         continue
-    #     target_file_name = softmax_file_name.replace('pred_logits', 'target').replace('.npy', '.png')
+    for softmax_file_name in os.listdir(softmax_dir):
+        if not softmax_file_name.endswith('.npy'):
+            continue
+        target_file_name = softmax_file_name.replace('pred_logits', 'target').replace('.npy', '.png')
         
-    #     # Load predicted softmax probabilities
-    #     probs = np.load(os.path.join(softmax_dir, softmax_file_name))  # shape: [C, H, W]
-    #     prob_class = probs[target_class]  # shape: [H, W]
+        # Load predicted softmax probabilities
+        probs = np.load(os.path.join(softmax_dir, softmax_file_name))  # shape: [C, H, W]
+        prob_class = probs[target_class]  # shape: [H, W]
         
-    #     # Load corresponding ground truth mask
-    #     gt = np.array(Image.open(os.path.join(target_dir, target_file_name)))  # shape: [H, W]
+        # Load corresponding ground truth mask
+        gt = np.array(Image.open(os.path.join(target_dir, target_file_name)))  # shape: [H, W]
 
-    #     # Create binary label mask for class
-    #     binary_gt = (gt == target_class).astype(np.uint8)
+        # Create binary label mask for class
+        binary_gt = (gt == target_class).astype(np.uint8)
         
-    #     # Flatten both arrays
-    #     all_probs.append(prob_class.flatten())
-    #     all_targets.append(binary_gt.flatten())
+        # Flatten both arrays
+        all_probs.append(prob_class.flatten())
+        all_targets.append(binary_gt.flatten())
 
-    # # Concatenate all data
-    # y_scores = np.concatenate(all_probs)    # predicted probs for class
-    # y_true = np.concatenate(all_targets)    # binary ground truth for class
+    # Concatenate all data
+    y_scores = np.concatenate(all_probs)    # predicted probs for class
+    y_true = np.concatenate(all_targets)    # binary ground truth for class
 
     # Compute AUC-ROC
-    # auc = roc_auc_score(y_true, y_scores)
-    # print(f"AUC-ROC for class {target_class}: {auc:.4f}")
+    auc = roc_auc_score(y_true, y_scores)
+    print(f"AUC-ROC for class {target_class}: {auc:.4f}")
 
-    # from sklearn.metrics import roc_curve, precision_recall_curve
-    # import matplotlib.pyplot as plt
+    from sklearn.metrics import roc_curve, precision_recall_curve
+    import matplotlib.pyplot as plt
     
     # Compute Average Precision (AP), i.e., area under PR curve
-    # ap = average_precision_score(y_true, y_scores)
-    # precision, recall, _ = precision_recall_curve(y_true, y_scores)
-    # print(f"Average Precision for class {target_class}: {ap:.4f}")
+    ap = average_precision_score(y_true, y_scores)
+    precision, recall, _ = precision_recall_curve(y_true, y_scores)
+    print(f"Average Precision for class {target_class}: {ap:.4f}")
 
-    # fpr, tpr, _ = roc_curve(y_true, y_scores)
-    # plt.plot(fpr, tpr, label=f'AUC = {auc:.2f}')
-    # plt.xlabel('False Positive Rate')
-    # plt.ylabel('True Positive Rate')
-    # plt.title(f'ROC Curve for Class {target_class}')
-    # plt.legend()
-    # plt.grid(True)
-    # plt.savefig(f'roc_curve_class_{target_class}.png')
+    fpr, tpr, _ = roc_curve(y_true, y_scores)
+    plt.plot(fpr, tpr, label=f'AUC = {auc:.2f}')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(f'ROC Curve for Class {target_class}')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f'roc_curve_class_{target_class}.png')
     
-    # # Clear plot
-    # plt.clf()
+    # Clear plot
+    plt.clf()
     
     # Plot Precision-Recall curve
-    # plt.plot(recall, precision, label=f'AP = {ap:.2f}')
-    # plt.xlabel('Recall')
-    # plt.ylabel('Precision')
-    # plt.title(f'Precision-Recall Curve for Class {target_class}')
-    # plt.legend()
-    # plt.grid(True)
-    # plt.savefig(f'pr_curve_class_{target_class}.png')
-    # plt.clf()
+    plt.plot(recall, precision, label=f'AP = {ap:.2f}')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title(f'Precision-Recall Curve for Class {target_class}')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f'pr_curve_class_{target_class}.png')
+    plt.clf()

@@ -17,6 +17,7 @@
   "savedir": "./results_segmentation_test",
   "eval_classes": [1, 2, 7, 6, 5],
   "eval_classes_names": ["sidewalk", "building", "traffic sign", "traffic light", "pole"],
+  "save_output_probabilities": true,
   "cmap": {
     "1": [244, 35, 232],
     "2": [70, 70, 70],

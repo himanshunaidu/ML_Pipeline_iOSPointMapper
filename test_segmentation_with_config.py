@@ -128,6 +128,149 @@ def test(args: TestConfig, model, dataset_loader: torch.utils.data.DataLoader, d
             f.write('\n')
     print_info_message('Metrics saved to {}'.format(save_path))
 
+def evaluate(args: TestConfig):
+    """
+    Post-testing evaluation of the segmentation results.
+    This function computes various metrics for each target class based on the predicted and ground truth masks.
+    Metrics: mIoU, Precision, Recall, Specificity, F1-score
+    Visualizations: AUC-ROC curves, Precision-Recall curves
+    """
+    output_file = os.path.join(args.savedir, 'post_metrics.txt')
+    target_classes = args.eval_classes
+    if target_classes is None:
+        print_error_message('Target classes are not provided in the config. Please check the config file.')
+        return
+    
+    input_dir = os.path.join(args.savedir, 'input')
+    pred_dir = os.path.join(args.savedir, 'pred')
+    target_dir = os.path.join(args.savedir, 'target')
+    
+    for target_class in target_classes:
+        tp, fp, tn, fn = 0, 0, 0, 0
+        precision, recall, specificity, f1_score, iou_score = 0.0, 0.0, 0.0, 0.0, 0.0
+        
+        for pred_file_name in tqdm(os.listdir(pred_dir), desc=f"Processing class {target_class}"):
+            if not pred_file_name.endswith('.png'):
+                continue
+            target_file_name = pred_file_name.replace('pred', 'target')
+            
+            # Load predicted mask
+            pred_mask = np.array(Image.open(os.path.join(pred_dir, pred_file_name)))  # shape: [H, W]
+            # Load corresponding ground truth mask
+            gt_mask = np.array(Image.open(os.path.join(target_dir, target_file_name)))  # shape: [H, W]
+            
+            # Create a mask that only contains the target class
+            pred_mask_target = (pred_mask == target_class).astype(np.uint8)
+            gt_mask_target = (gt_mask == target_class).astype(np.uint8)
+            
+            # Skip if ground truth mask is empty
+            if np.sum(gt_mask_target) == 0: continue
+            
+            # Calculate True Positives, False Positives, True Negatives, False Negatives
+            tp += np.sum((pred_mask_target == 1) & (gt_mask_target == 1))
+            fp += np.sum((pred_mask_target == 1) & (gt_mask_target == 0))
+            tn += np.sum((pred_mask_target == 0) & (gt_mask_target == 0))
+            fn += np.sum((pred_mask_target == 0) & (gt_mask_target == 1))
+        
+        # Calculate metrics
+        if tp + fp > 0:
+            precision = tp / (tp + fp)
+        if tp + fn > 0:
+            recall = tp / (tp + fn)
+        if tn + fp > 0:
+            specificity = tn / (tn + fp)
+        print_info_message(f"precision: {precision}, recall: {recall}, specificity: {specificity}")
+        if tp + fn > 0 and tp + fp > 0: # Avoid division by zero
+            f1_score = 2 * (precision * recall) / (precision + recall)
+        if tp + fp + fn > 0:  # Avoid division by zero
+            iou_score = tp / (tp + fp + fn)
+            
+        with open(output_file, 'a') as f:
+            f.write(f"Metrics for class {target_class}:\n")
+            f.write(f"Precision: {precision:.4f}\n")
+            f.write(f"Recall: {recall:.4f}\n")
+            f.write(f"Specificity: {specificity:.4f}\n")
+            f.write(f"F1-score: {f1_score:.4f}\n")
+            f.write(f"IoU: {iou_score:.4f}\n")
+            f.write("\n")
+
+    if not args.save_output_probabilities:
+        print_info_message('Skipping AUC-ROC and Precision-Recall curves as output probabilities are not saved.')
+        return
+    softmax_dir = os.path.join(args.savedir, 'pred_logits')
+    if not os.path.exists(softmax_dir):
+        print_error_message('Softmax directory does not exist: {}'.format(softmax_dir))
+        return
+    
+    from matplotlib import pyplot as plt
+    from sklearn.metrics import roc_curve, precision_recall_curve
+    from sklearn.metrics import roc_auc_score, average_precision_score
+    
+    auc_roc_dir = os.path.join(args.savedir, 'auc_roc')
+    if not os.path.exists(auc_roc_dir): os.makedirs(auc_roc_dir)
+    pr_curve_dir = os.path.join(args.savedir, 'pr_curve')
+    if not os.path.exists(pr_curve_dir): os.makedirs(pr_curve_dir)
+    
+    for target_class in target_classes:
+        # Lists to collect predictions and ground truth
+        all_probs = []
+        all_targets = []
+
+        for softmax_file_name in os.listdir(softmax_dir):
+            if not softmax_file_name.endswith('.npy'):
+                continue
+            target_file_name = softmax_file_name.replace('pred_logits', 'target').replace('.npy', '.png')
+            
+            # Load predicted softmax probabilities
+            probs = np.load(os.path.join(softmax_dir, softmax_file_name))  # shape: [C, H, W]
+            prob_class = probs[target_class]  # shape: [H, W]
+            
+            # Load corresponding ground truth mask
+            gt = np.array(Image.open(os.path.join(target_dir, target_file_name)))  # shape: [H, W]
+
+            # Create binary label mask for class
+            binary_gt = (gt == target_class).astype(np.uint8)
+            
+            # Flatten both arrays
+            all_probs.append(prob_class.flatten())
+            all_targets.append(binary_gt.flatten())
+
+        # Concatenate all data
+        y_scores = np.concatenate(all_probs)    # predicted probs for class
+        y_true = np.concatenate(all_targets)    # binary ground truth for class
+
+        # Compute AUC-ROC
+        auc = roc_auc_score(y_true, y_scores)
+        print(f"AUC-ROC for class {target_class}: {auc:.4f}")
+        
+        # Compute Average Precision (AP), i.e., area under PR curve
+        ap = average_precision_score(y_true, y_scores)
+        precision, recall, _ = precision_recall_curve(y_true, y_scores)
+        print(f"Average Precision for class {target_class}: {ap:.4f}")
+
+        fpr, tpr, _ = roc_curve(y_true, y_scores)
+        plt.plot(fpr, tpr, label=f'AUC = {auc:.2f}')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title(f'ROC Curve for Class {target_class}')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(auc_roc_dir, f'roc_curve_class_{target_class}.png'))
+
+        # Clear plot
+        plt.clf()
+        
+        # Plot Precision-Recall curve
+        plt.plot(recall, precision, label=f'AP = {ap:.2f}')
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title(f'Precision-Recall Curve for Class {target_class}')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(pr_curve_dir, f'pr_curve_class_{target_class}.png'))
+        plt.clf()
+    return
+
 def recolor_images(args: TestConfig):
     input_dir = os.path.join(args.savedir, 'input')
     pred_dir = os.path.join(args.savedir, 'pred')
@@ -189,7 +332,7 @@ def recolor_images(args: TestConfig):
         combined_image.save(os.path.join(combined_dir, pred_file_name.replace('pred', 'combined')))
     
     print("Recoloring and saving images completed. Combined images are saved in: {}".format(combined_dir))
-    return  # This function is not implemented in the provided code snippet
+    return
 
 def main(args: TestConfig):
     dataset, seg_classes, mean, std = get_dataset_config(args)
@@ -224,6 +367,7 @@ def main(args: TestConfig):
     
     test(args, model, dataset_loader, device=device)
     recolor_images(args)
+    evaluate(args)
 
 if __name__ == '__main__':
     from config.general_details import segmentation_models, segmentation_datasets
