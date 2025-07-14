@@ -3,8 +3,10 @@ This utility file contains functions used by the main train and test scripts for
 It includes using the arguments provided by the user to get the dataset, the model, optimizer, etc.
 """
 import os
+import json
 import numpy as np
-from typing import Optional, List, Tuple
+import pandas as pd
+from typing import Optional, List, Tuple, Union
 import torch
 from PIL import Image
 from tqdm import tqdm
@@ -210,7 +212,62 @@ def save_images(args: TestConfig, input, target, output_prob, output, index, cma
         output_rgb_image = grayscale_tensor_to_rgb_tensor(output.unsqueeze(0), cmap)
         output_rgb_image = F.to_pil_image(output_rgb_image.cpu())
         output_rgb_image.save(os.path.join(args.savedir, 'pred_rgb', 'pred_rgb_{}.png'.format(index)))
-        
+
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
+def get_metrics_table(results: dict) -> pd.DataFrame:
+    """
+    Loads class metrics from results and returns a DataFrame.
+    
+    Args:
+        results (dict): Dictionary containing the results, expected to have a 'class_metrics' key.
+    
+    Returns:
+        pd.DataFrame: Table of per-class metrics
+    """
+    # Load if path is given
+
+    # Extract class-level metrics
+    class_metrics = results.get("class_metrics", [])
+    if not class_metrics:
+        raise ValueError("No 'class_metrics' key found in results.")
+
+    # Create a DataFrame
+    df = pd.DataFrame(class_metrics)
+
+    # Optional: Sort by class_id or name
+    df.sort_values(by="class_id", inplace=True)
+
+    # Optional: Select and rename columns for cleaner output
+    df = df[[
+        "class_id",
+        "class_name",
+        "precision",
+        "recall",
+        "f1_score",
+        "iou_score",
+        "pixel_count"
+    ]].rename(columns={
+        "class_id": "Class ID",
+        "class_name": "Class",
+        "precision": "Precision",
+        "recall": "Recall",
+        "f1_score": "F1-score",
+        "iou_score": "IoU",
+        "pixel_count": "Pixel Count"
+    })
+
+    return df
+
 def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
     """
     Get the paths for saving post metrics.
@@ -328,6 +385,16 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
             'FWmRecall': FWmRecall,
         }
     }
+    
+    with open(output_file, 'w') as f:
+        json.dump(results, f, indent=4, cls=NumpyEncoder)
+    print_info_message(f'Metrics saved to {output_file}')
+    
+    # Save to csv as well
+    df = get_metrics_table(results)
+    csv_file = output_file.replace('.json', '.csv')
+    df.to_csv(csv_file, index=False)
+    print_info_message(f'Metrics saved to {csv_file}: \n{df.to_markdown(index=False)}')
         
             
 def get_post_viz(args: TestConfig):
