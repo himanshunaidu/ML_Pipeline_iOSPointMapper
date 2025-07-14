@@ -219,7 +219,7 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
     
     NOTE: Should later move the core logic to eval folder.
     """
-    output_file = os.path.join(args.savedir, 'post_metrics.txt')
+    output_file = os.path.join(args.savedir, 'post_metrics.json')
     target_classes = args.eval_classes
     if target_classes is None:
         print_error_message('Target classes are not provided in the config. Please check the config file.')
@@ -228,6 +228,15 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
     input_dir = os.path.join(args.savedir, 'input')
     pred_dir = os.path.join(args.savedir, 'pred')
     target_dir = os.path.join(args.savedir, 'target')
+    
+    class_stats = []
+    total_pixels = 0
+    weighted_iou_sum = 0.0
+    weighted_precision_sum = 0.0
+    weighted_recall_sum = 0.0
+    all_iou_values = []
+    all_precision_values = []
+    all_recall_values = []
 
     for index, target_class in enumerate(target_classes):
         target_class_name = args.eval_class_names[index] \
@@ -260,26 +269,66 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
             fn += np.sum((pred_mask_target == 0) & (gt_mask_target == 1))
         
         # Calculate metrics
-        if tp + fp > 0:
-            precision = tp / (tp + fp)
-        if tp + fn > 0:
-            recall = tp / (tp + fn)
-        if tn + fp > 0:
-            specificity = tn / (tn + fp)
-        print_info_message(f"precision: {precision}, recall: {recall}, specificity: {specificity}")
-        if tp + fn > 0 and tp + fp > 0: # Avoid division by zero
-            f1_score = 2 * (precision * recall) / (precision + recall)
-        if tp + fp + fn > 0:  # Avoid division by zero
-            iou_score = tp / (tp + fp + fn)
+        precision = tp / (tp + fp) if tp + fp > 0 else 0.0
+        recall = tp / (tp + fn) if tp + fn > 0 else 0.0
+        specificity = tn / (tn + fp) if tn + fp > 0 else 0.0
+        # print_info_message(f"precision: {precision}, recall: {recall}, specificity: {specificity}")
+        f1_score = 2 * (precision * recall) / (precision + recall) if (tp + fn > 0 and tp + fp > 0) else 0.0
+        iou_score = tp / (tp + fp + fn) if (tp + fp + fn > 0) else 0.0
         
-        with open(output_file, 'a') as f:
-            f.write(f"Metrics for class {target_class} ({target_class_name}):\n")
-            f.write(f"Precision: {precision:.4f}\n")
-            f.write(f"Recall: {recall:.4f}\n")
-            f.write(f"Specificity: {specificity:.4f}\n")
-            f.write(f"F1-score: {f1_score:.4f}\n")
-            f.write(f"IoU: {iou_score:.4f}\n")
-            f.write("\n")
+        pixel_count = tp + fn # Total pixels in the target class
+        
+        class_stats.append({
+            'class_id': target_class,
+            'class_name': target_class_name,
+            'tp': tp,
+            'fp': fp,
+            'tn': tn,
+            'fn': fn,
+            'precision': precision,
+            'recall': recall,
+            'specificity': specificity,
+            'f1_score': f1_score,
+            'iou_score': iou_score,
+            'pixel_count': pixel_count
+        })
+        
+        total_pixels += pixel_count
+        weighted_iou_sum += iou_score * pixel_count
+        all_iou_values.append(iou_score)
+        weighted_precision_sum += precision * pixel_count
+        all_precision_values.append(precision)
+        weighted_recall_sum += recall * pixel_count
+        all_recall_values.append(recall)
+        
+    # Macro (mean) metrics
+    mIoU = np.mean(all_iou_values) if all_iou_values else 0.0
+    FWIoU = weighted_iou_sum / total_pixels if total_pixels > 0 else 0.0
+    mPrecision = np.mean(all_precision_values) if all_precision_values else 0.0
+    FWmPrecision = weighted_precision_sum / total_pixels if total_pixels > 0 else 0.0
+    mRecall = np.mean(all_recall_values) if all_recall_values else 0.0
+    FWmRecall = weighted_recall_sum / total_pixels if total_pixels > 0 else 0.0
+    
+    results = {
+        'dataset': args.dataset,
+        'model': args.model,
+        'num_classes': args.classes,
+        'im_size': args.im_size,
+        'is_custom': args.is_custom,
+        'custom_mapping_dict_key': args.custom_mapping_dict_key,
+        'eval_classes': args.eval_classes,
+        'eval_class_names': args.eval_class_names,
+        'class_metrics': class_stats,
+        'overall_metrics': {
+            'mIoU': mIoU,
+            'FWIoU': FWIoU,
+            'mPrecision': mPrecision,
+            'FWmPrecision': FWmPrecision,
+            'mRecall': mRecall,
+            'FWmRecall': FWmRecall,
+        }
+    }
+        
             
 def get_post_viz(args: TestConfig):
     """
