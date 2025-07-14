@@ -459,6 +459,9 @@ def get_post_viz(args: TestConfig):
             all_targets.append(binary_gt.flatten())
 
         # Concatenate all data
+        if len(all_probs) == 0 or len(all_targets) == 0:
+            print_warning_message(f'No data found for class {target_class} ({target_class_name}). Skipping AUC-ROC and PR curves.')
+            continue
         y_scores = np.concatenate(all_probs)    # predicted probs for class
         y_true = np.concatenate(all_targets)    # binary ground truth for class
 
