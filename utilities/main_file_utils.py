@@ -6,6 +6,8 @@ import os
 import numpy as np
 from typing import Optional, List, Tuple
 import torch
+from PIL import Image
+from tqdm import tqdm
 
 from torch import nn
 from torchvision.transforms import functional as F
@@ -208,3 +210,213 @@ def save_images(args: TestConfig, input, target, output_prob, output, index, cma
         output_rgb_image = grayscale_tensor_to_rgb_tensor(output.unsqueeze(0), cmap)
         output_rgb_image = F.to_pil_image(output_rgb_image.cpu())
         output_rgb_image.save(os.path.join(args.savedir, 'pred_rgb', 'pred_rgb_{}.png'.format(index)))
+        
+def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
+    """
+    Get the paths for saving post metrics.
+    :param args: Namespace containing the arguments
+    :return: Tuple containing the paths for post metrics and softmax directory
+    """
+    output_file = os.path.join(args.savedir, 'post_metrics.txt')
+    target_classes = args.eval_classes
+    if target_classes is None:
+        print_error_message('Target classes are not provided in the config. Please check the config file.')
+        return
+    
+    input_dir = os.path.join(args.savedir, 'input')
+    pred_dir = os.path.join(args.savedir, 'pred')
+    target_dir = os.path.join(args.savedir, 'target')
+    
+    for target_class in target_classes:
+        tp, fp, tn, fn = 0, 0, 0, 0
+        precision, recall, specificity, f1_score, iou_score = 0.0, 0.0, 0.0, 0.0, 0.0
+        
+        for pred_file_name in tqdm(os.listdir(pred_dir), desc=f"Processing class {target_class}"):
+            if not pred_file_name.endswith('.png'):
+                continue
+            target_file_name = pred_file_name.replace('pred', 'target')
+            
+            # Load predicted mask
+            pred_mask = np.array(Image.open(os.path.join(pred_dir, pred_file_name)))  # shape: [H, W]
+            # Load corresponding ground truth mask
+            gt_mask = np.array(Image.open(os.path.join(target_dir, target_file_name)))  # shape: [H, W]
+            
+            # Create a mask that only contains the target class
+            pred_mask_target = (pred_mask == target_class).astype(np.uint8)
+            gt_mask_target = (gt_mask == target_class).astype(np.uint8)
+            
+            # Skip if ground truth mask is empty
+            if np.sum(gt_mask_target) == 0: continue
+            
+            # Calculate True Positives, False Positives, True Negatives, False Negatives
+            tp += np.sum((pred_mask_target == 1) & (gt_mask_target == 1))
+            fp += np.sum((pred_mask_target == 1) & (gt_mask_target == 0))
+            tn += np.sum((pred_mask_target == 0) & (gt_mask_target == 0))
+            fn += np.sum((pred_mask_target == 0) & (gt_mask_target == 1))
+        
+        # Calculate metrics
+        if tp + fp > 0:
+            precision = tp / (tp + fp)
+        if tp + fn > 0:
+            recall = tp / (tp + fn)
+        if tn + fp > 0:
+            specificity = tn / (tn + fp)
+        print_info_message(f"precision: {precision}, recall: {recall}, specificity: {specificity}")
+        if tp + fn > 0 and tp + fp > 0: # Avoid division by zero
+            f1_score = 2 * (precision * recall) / (precision + recall)
+        if tp + fp + fn > 0:  # Avoid division by zero
+            iou_score = tp / (tp + fp + fn)
+            
+        with open(output_file, 'a') as f:
+            f.write(f"Metrics for class {target_class}:\n")
+            f.write(f"Precision: {precision:.4f}\n")
+            f.write(f"Recall: {recall:.4f}\n")
+            f.write(f"Specificity: {specificity:.4f}\n")
+            f.write(f"F1-score: {f1_score:.4f}\n")
+            f.write(f"IoU: {iou_score:.4f}\n")
+            f.write("\n")
+            
+def get_post_viz(args: TestConfig):
+    target_classes = args.eval_classes
+    if target_classes is None:
+        print_error_message('Target classes are not provided in the config. Please check the config file.')
+        return
+    if not args.save_output_probabilities:
+        print_info_message('Skipping AUC-ROC and Precision-Recall curves as output probabilities are not saved.')
+        return
+    target_dir = os.path.join(args.savedir, 'target')
+    softmax_dir = os.path.join(args.savedir, 'pred_logits')
+    if not os.path.exists(softmax_dir):
+        print_error_message('Softmax directory does not exist: {}'.format(softmax_dir))
+        return
+    
+    from matplotlib import pyplot as plt
+    from sklearn.metrics import roc_curve, precision_recall_curve
+    from sklearn.metrics import roc_auc_score, average_precision_score
+    
+    auc_roc_dir = os.path.join(args.savedir, 'auc_roc')
+    if not os.path.exists(auc_roc_dir): os.makedirs(auc_roc_dir)
+    pr_curve_dir = os.path.join(args.savedir, 'pr_curve')
+    if not os.path.exists(pr_curve_dir): os.makedirs(pr_curve_dir)
+    
+    for target_class in target_classes:
+        # Lists to collect predictions and ground truth
+        all_probs = []
+        all_targets = []
+
+        for softmax_file_name in os.listdir(softmax_dir):
+            if not softmax_file_name.endswith('.npy'):
+                continue
+            target_file_name = softmax_file_name.replace('pred_logits', 'target').replace('.npy', '.png')
+            
+            # Load predicted softmax probabilities
+            probs = np.load(os.path.join(softmax_dir, softmax_file_name))  # shape: [C, H, W]
+            prob_class = probs[target_class]  # shape: [H, W]
+            
+            # Load corresponding ground truth mask
+            gt = np.array(Image.open(os.path.join(target_dir, target_file_name)))  # shape: [H, W]
+
+            # Create binary label mask for class
+            binary_gt = (gt == target_class).astype(np.uint8)
+            
+            # Flatten both arrays
+            all_probs.append(prob_class.flatten())
+            all_targets.append(binary_gt.flatten())
+
+        # Concatenate all data
+        y_scores = np.concatenate(all_probs)    # predicted probs for class
+        y_true = np.concatenate(all_targets)    # binary ground truth for class
+
+        # Compute AUC-ROC
+        auc = roc_auc_score(y_true, y_scores)
+        print(f"AUC-ROC for class {target_class}: {auc:.4f}")
+        
+        # Compute Average Precision (AP), i.e., area under PR curve
+        ap = average_precision_score(y_true, y_scores)
+        precision, recall, _ = precision_recall_curve(y_true, y_scores)
+        print(f"Average Precision for class {target_class}: {ap:.4f}")
+
+        fpr, tpr, _ = roc_curve(y_true, y_scores)
+        plt.plot(fpr, tpr, label=f'AUC = {auc:.2f}')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title(f'ROC Curve for Class {target_class}')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(auc_roc_dir, f'roc_curve_class_{target_class}.png'))
+
+        # Clear plot
+        plt.clf()
+        
+        # Plot Precision-Recall curve
+        plt.plot(recall, precision, label=f'AP = {ap:.2f}')
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title(f'Precision-Recall Curve for Class {target_class}')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(pr_curve_dir, f'pr_curve_class_{target_class}.png'))
+        plt.clf()
+        
+def recolor_images(args: TestConfig):
+    input_dir = os.path.join(args.savedir, 'input')
+    pred_dir = os.path.join(args.savedir, 'pred')
+    pred_rgb_dir = os.path.join(args.savedir, 'pred_rgb')
+    target_dir = os.path.join(args.savedir, 'target')
+    target_rgb_dir = os.path.join(args.savedir, 'target_rgb')
+    
+    combined_dir = os.path.join(args.savedir, 'combined')
+    if not os.path.exists(combined_dir): os.makedirs(combined_dir)
+    
+    cmap = args.cmap
+    if cmap is None:
+        print_error_message('Color map is not provided in the config. Please check the config file.')
+        return
+    target_classes = args.eval_classes
+    if target_classes is None:
+        print_error_message('Target classes are not provided in the config. Please check the config file.')
+        return
+    
+    for pred_file_name in tqdm(os.listdir(pred_dir), desc="Recoloring images and saving as combined image for visualization"):
+        if not pred_file_name.endswith('.png'):
+            continue
+        if 'rgb' in pred_file_name or 'target' in pred_file_name:
+            continue
+        target_file_name = pred_file_name.replace('pred', 'target')
+        
+        # Load predicted mask
+        pred_mask = np.array(Image.open(os.path.join(pred_dir, pred_file_name)))  # shape: [H, W]
+        
+        # Load corresponding ground truth mask
+        gt_mask = np.array(Image.open(os.path.join(target_dir, target_file_name)))  # shape: [H, W]
+        
+        # Create a mask that only contains the target classes
+        pred_mask_target = np.isin(pred_mask, target_classes).astype(np.uint8)
+        gt_mask_target = np.isin(gt_mask, target_classes).astype(np.uint8)
+        
+        # Create RGB images for visualization
+        pred_rgb = np.zeros((*pred_mask.shape, 3), dtype=np.uint8)
+        gt_rgb = np.zeros((*gt_mask.shape, 3), dtype=np.uint8)
+        
+        for i, class_id in enumerate(target_classes):
+            pred_rgb[pred_mask == class_id] = cmap[class_id]
+            gt_rgb[gt_mask == class_id] = cmap[class_id]
+        
+        # Save RGB images
+        Image.fromarray(pred_rgb, mode='RGB').save(os.path.join(pred_rgb_dir, pred_file_name))
+        Image.fromarray(gt_rgb, mode='RGB').save(os.path.join(target_rgb_dir, target_file_name))
+        
+        input_file_name = pred_file_name.replace('pred', 'input')
+        input_image = Image.open(os.path.join(input_dir, input_file_name))
+        # Resize input image to match the prediction size
+        input_image = input_image.resize(pred_mask.shape[::-1], Image.BILINEAR)
+
+        # Combine input, target, and prediction for visualization
+        combined_image = Image.new('RGB', (input_image.width * 3, input_image.height))
+        combined_image.paste(input_image, (0, 0))
+        combined_image.paste(Image.fromarray(gt_rgb, mode='RGB'), (input_image.width, 0))
+        combined_image.paste(Image.fromarray(pred_rgb, mode='RGB'), (input_image.width * 2, 0))
+        combined_image.save(os.path.join(combined_dir, pred_file_name.replace('pred', 'combined')))
+    
+    print("Recoloring and saving images completed. Combined images are saved in: {}".format(combined_dir))
+    return
