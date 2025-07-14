@@ -216,6 +216,8 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
     Get the paths for saving post metrics.
     :param args: Namespace containing the arguments
     :return: Tuple containing the paths for post metrics and softmax directory
+    
+    NOTE: Should later move the core logic to eval folder.
     """
     output_file = os.path.join(args.savedir, 'post_metrics.txt')
     target_classes = args.eval_classes
@@ -226,8 +228,11 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
     input_dir = os.path.join(args.savedir, 'input')
     pred_dir = os.path.join(args.savedir, 'pred')
     target_dir = os.path.join(args.savedir, 'target')
-    
-    for target_class in target_classes:
+
+    for index, target_class in enumerate(target_classes):
+        target_class_name = args.eval_class_names[index] \
+            if args.eval_class_names is not None and index < len(args.eval_class_names) else ""
+        
         tp, fp, tn, fn = 0, 0, 0, 0
         precision, recall, specificity, f1_score, iou_score = 0.0, 0.0, 0.0, 0.0, 0.0
         
@@ -245,7 +250,7 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
             pred_mask_target = (pred_mask == target_class).astype(np.uint8)
             gt_mask_target = (gt_mask == target_class).astype(np.uint8)
             
-            # Skip if ground truth mask is empty
+            # NOTE: Skip if ground truth mask is empty
             if np.sum(gt_mask_target) == 0: continue
             
             # Calculate True Positives, False Positives, True Negatives, False Negatives
@@ -266,9 +271,9 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
             f1_score = 2 * (precision * recall) / (precision + recall)
         if tp + fp + fn > 0:  # Avoid division by zero
             iou_score = tp / (tp + fp + fn)
-            
+        
         with open(output_file, 'a') as f:
-            f.write(f"Metrics for class {target_class}:\n")
+            f.write(f"Metrics for class {target_class} ({target_class_name}):\n")
             f.write(f"Precision: {precision:.4f}\n")
             f.write(f"Recall: {recall:.4f}\n")
             f.write(f"Specificity: {specificity:.4f}\n")
@@ -277,6 +282,14 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
             f.write("\n")
             
 def get_post_viz(args: TestConfig):
+    """
+    Generate post-processing visualizations such as AUC-ROC and Precision-Recall curves.
+    
+    :param args: Namespace containing the arguments
+    :return: None
+    
+    NOTE: Should later move the core logic to eval folder.
+    """
     target_classes = args.eval_classes
     if target_classes is None:
         print_error_message('Target classes are not provided in the config. Please check the config file.')
@@ -299,7 +312,10 @@ def get_post_viz(args: TestConfig):
     pr_curve_dir = os.path.join(args.savedir, 'pr_curve')
     if not os.path.exists(pr_curve_dir): os.makedirs(pr_curve_dir)
     
-    for target_class in target_classes:
+    for index, target_class in enumerate(target_classes):
+        target_class_name = args.eval_class_names[index] \
+            if args.eval_class_names is not None and index < len(args.eval_class_names) else ""
+        
         # Lists to collect predictions and ground truth
         all_probs = []
         all_targets = []
@@ -319,6 +335,9 @@ def get_post_viz(args: TestConfig):
             # Create binary label mask for class
             binary_gt = (gt == target_class).astype(np.uint8)
             
+            # Skip if ground truth mask is empty
+            if np.sum(binary_gt) == 0: continue
+            
             # Flatten both arrays
             all_probs.append(prob_class.flatten())
             all_targets.append(binary_gt.flatten())
@@ -329,18 +348,18 @@ def get_post_viz(args: TestConfig):
 
         # Compute AUC-ROC
         auc = roc_auc_score(y_true, y_scores)
-        print(f"AUC-ROC for class {target_class}: {auc:.4f}")
-        
+        print(f"AUC-ROC for class {target_class} ({target_class_name}): {auc:.4f}")
+
         # Compute Average Precision (AP), i.e., area under PR curve
         ap = average_precision_score(y_true, y_scores)
         precision, recall, _ = precision_recall_curve(y_true, y_scores)
-        print(f"Average Precision for class {target_class}: {ap:.4f}")
+        print(f"Average Precision for class {target_class} ({target_class_name}): {ap:.4f}")
 
         fpr, tpr, _ = roc_curve(y_true, y_scores)
         plt.plot(fpr, tpr, label=f'AUC = {auc:.2f}')
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
-        plt.title(f'ROC Curve for Class {target_class}')
+        plt.title(f'ROC Curve for Class {target_class} ({target_class_name})')
         plt.legend()
         plt.grid(True)
         plt.savefig(os.path.join(auc_roc_dir, f'roc_curve_class_{target_class}.png'))
@@ -352,7 +371,7 @@ def get_post_viz(args: TestConfig):
         plt.plot(recall, precision, label=f'AP = {ap:.2f}')
         plt.xlabel('Recall')
         plt.ylabel('Precision')
-        plt.title(f'Precision-Recall Curve for Class {target_class}')
+        plt.title(f'Precision-Recall Curve for Class {target_class} ({target_class_name})')
         plt.legend()
         plt.grid(True)
         plt.savefig(os.path.join(pr_curve_dir, f'pr_curve_class_{target_class}.png'))

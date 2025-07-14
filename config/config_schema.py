@@ -39,5 +39,6 @@ class TestConfig(BaseModel):
     
     # Evaluation
     eval_classes: Optional[List[int]] = Field(default=None, description='List of classes for evaluation')
+    eval_class_names: Optional[List[str]] = Field(default=None, description='List of class names for evaluation')
     save_output_probabilities: bool = Field(default=False, description='Whether to save output probabilities')
     cmap: Optional[dict[int, List[int]]] = Field(default=None, description='Color map for visualization')
