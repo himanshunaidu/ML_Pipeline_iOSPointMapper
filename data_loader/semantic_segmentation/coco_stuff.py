@@ -32,6 +32,14 @@ def get_cocoStuff_num_classes(is_custom=False, custom_mapping_dict_key=None):
     # else:
     return 182  # Default number of classes in COCOStuff without custom mapping
 
+def get_cocoStuff_mean_std():
+    """
+    Returns the mean and standard deviation values for COCOStuff dataset.
+    """
+    mean = (0.46962251, 0.4464104,  0.40718787)
+    std = (0.27469736, 0.27012361, 0.28515933)
+    return mean, std
+
 class COCOStuffSegmentation(data.Dataset):
     # these are the same as the PASCAL VOC dataset
 

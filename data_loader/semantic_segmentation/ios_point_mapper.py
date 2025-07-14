@@ -44,6 +44,14 @@ def get_ios_point_mapper_num_classes(is_custom=False, custom_mapping_dict_key=No
     # else:
     return len(ios_point_mapper_dict.keys())  # Default number of classes in iOSPointMapper without custom mapping
 
+def get_ios_point_mapper_mean_std():
+    """
+    Returns the mean and standard deviation values for iOS Point Mapper dataset.
+    """
+    mean = (0.3257, 0.3690, 0.3223)
+    std = (0.2112, 0.2148, 0.2115)
+    return mean, std
+
 class iOSPointMapperDataset(data.Dataset):
     """
     Dataset class for Edge Mapping dataset.
