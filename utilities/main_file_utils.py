@@ -48,6 +48,14 @@ def get_dataset_config(args: TestConfig) -> tuple[data.Dataset, int, list, list]
                                             is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
         seg_classes = get_edge_mapping_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
         mean, std = get_edge_mapping_mean_std()
+    elif args.dataset == 'edge_mapping_ios': # MARK: edge mapping dataset
+        from data_loader.semantic_segmentation.edge_mapping_ios import EdgeMappingIOSDataset, get_edge_mapping_ios_num_classes, get_edge_mapping_ios_mean_std
+        dataset = EdgeMappingIOSDataset(root=args.data_path, train=False, scale=args.s,
+                                        size=args.im_size, ignore_idx=255,
+                                        mean=[0, 0, 0], std=[1, 1, 1],
+                                        is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        seg_classes = get_edge_mapping_ios_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+        mean, std = get_edge_mapping_ios_mean_std()
     elif args.dataset == 'ios_point_mapper':
         from data_loader.semantic_segmentation.ios_point_mapper import iOSPointMapperDataset, get_ios_point_mapper_num_classes, get_ios_point_mapper_mean_std
         dataset = iOSPointMapperDataset(root=args.data_path, train=False, scale=args.s,
@@ -102,6 +110,8 @@ def get_save_dir(args: TestConfig) -> str:
     if args.dataset == 'city':
         savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
+        savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
+    elif args.dataset == 'edge_mapping_ios': # MARK: edge mapping dataset
         savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'ios_point_mapper':
         savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)

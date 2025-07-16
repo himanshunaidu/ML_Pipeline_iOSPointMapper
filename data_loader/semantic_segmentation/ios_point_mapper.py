@@ -8,7 +8,8 @@ from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomC
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
 from data_loader.semantic_segmentation.ios_point_mapper_scripts.custom_maps import ios_point_mapper_dict, \
     ios_point_mapper_to_cocoStuff_custom_35_dict, ios_point_mapper_to_cocoStuff_custom_11_dict, \
-    ios_point_mapper_to_cocoStuff_custom_9_dict, ios_point_mapper_to_cityscapes_dict #, ios_point_mapper_to_cocoStuff_custom_53_dict
+    ios_point_mapper_to_cocoStuff_custom_9_dict, ios_point_mapper_to_cityscapes_dict, \
+    ios_point_mapper_to_cocoStuff_custom_35_dict_deprecated
 
 # IOS_POINT_MAPPER_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
 #                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
@@ -19,7 +20,8 @@ custom_mapping_dicts = {
     # '53': ios_point_mapper_to_cocoStuff_custom_53_dict,
     '35': ios_point_mapper_to_cocoStuff_custom_35_dict,
     '11': ios_point_mapper_to_cocoStuff_custom_11_dict,
-    '9': ios_point_mapper_to_cocoStuff_custom_9_dict
+    '9': ios_point_mapper_to_cocoStuff_custom_9_dict,
+    '35_deprecated': ios_point_mapper_to_cocoStuff_custom_35_dict_deprecated
 }
 
 def get_ios_point_mapper_num_classes(is_custom=False, custom_mapping_dict_key=None):
@@ -36,6 +38,7 @@ def get_ios_point_mapper_num_classes(is_custom=False, custom_mapping_dict_key=No
         if custom_mapping_dict_key == '11': return 11
         if custom_mapping_dict_key == '9': return 9
         if custom_mapping_dict_key == 'city': return 20
+        if custom_mapping_dict_key == '35_deprecated': return 35  # Deprecated version
     # else:
     return len(ios_point_mapper_dict.keys())  # Default number of classes in iOSPointMapper without custom mapping
 

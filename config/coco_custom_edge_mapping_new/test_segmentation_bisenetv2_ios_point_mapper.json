@@ -1,0 +1,28 @@
+{
+  "workers": 4,
+  "model": "bisenetv2",
+  "weights_test": "model/semantic_segmentation/model_zoo/bisenetv2/model_final_coco_ios_point_mapper.pth",
+  "s": 2.0,
+  "dataset": "ios_point_mapper",
+  "data_path": "./datasets/ios_point_mapper",
+  "im_size": [640, 640],
+  "split": "val",
+  "batch_size": 1,
+  "model_width": 224,
+  "model_height": 224,
+  "channels": 3,
+  "is_custom": true,
+  "custom_mapping_dict_key": "35_deprecated",
+  "classes": 35,
+  "savedir": "./results_segmentation_test",
+  "eval_classes": [22, 16, 10, 8, 21],
+  "eval_class_names": ["sidewalk", "building", "traffic sign", "traffic light", "pole"],
+  "save_output_probabilities": true,
+  "cmap": {
+    "22": [244, 35, 232],
+    "16": [70, 70, 70],
+    "10": [220, 220, 0],
+    "8": [250, 170, 30],
+    "21": [153, 153, 153]
+  }
+}
