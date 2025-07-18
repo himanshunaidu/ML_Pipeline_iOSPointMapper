@@ -37,6 +37,7 @@ def get_dataset_config(args: TestConfig) -> tuple[data.Dataset, int, list, list]
         from data_loader.semantic_segmentation.coco_stuff import COCOStuffSegmentation, get_cocoStuff_num_classes, get_cocoStuff_mean_std
         dataset = COCOStuffSegmentation(root_dir=args.data_path, split=args.split, is_training=False,
                                          scale=(args.s, args.s), crop_size=args.im_size,
+                                         mean=[0, 0, 0], std=[1, 1, 1],
                                          is_custom= args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
         seg_classes = get_cocoStuff_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
         mean, std = get_cocoStuff_mean_std()
@@ -110,15 +111,15 @@ def get_save_dir(args: TestConfig) -> str:
     if args.dataset == 'city':
         savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-        savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
+        savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping_ios': # MARK: edge mapping dataset
-        savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
+        savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'ios_point_mapper':
-        savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
+        savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
     elif args.dataset == 'pascal':
         savedir = 'results_test/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
     elif args.dataset == 'coco_stuff':
-        savedir = 'results_test/{}_{}/{}'.format('results', args.dataset, args.split)
+        savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
     else:
         # print_error_message('{} dataset not yet supported'.format(args.dataset))
         raise NotImplementedError('Dataset {} not implemented'.format(args.dataset))
@@ -269,10 +270,10 @@ def get_metrics_table(results: dict) -> pd.DataFrame:
     ]].rename(columns={
         "class_id": "Class ID",
         "class_name": "Class",
+        "iou_score": "IoU",
         "precision": "Precision",
         "recall": "Recall",
         "f1_score": "F1-score",
-        "iou_score": "IoU",
         "pixel_count": "Pixel Count"
     })
 

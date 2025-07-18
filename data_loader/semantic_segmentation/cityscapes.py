@@ -22,12 +22,20 @@ CITYSCAPE_TRAIN_CMAP = {
 cityscape_to_custom_cocoStuff_53_dict = {0:41, 1:35, 2:19, 3:50, 4:24, 5:0, 6:8, 7:11, 8:31, 9:27,
                             10:0, 11:1, 12:1, 13:3, 14:12, 15:5, 16:6, 17:2, 18:2, 19:0}
 
-cityscapes_to_custom_cocoStuff_35_dict = {0:27, 1:22, 2:16, 3:33, 4:20, 5:21, 6:8, 7:10, 8:15, 9:19,
+cityscapes_to_custom_cocoStuff_35_dict = {0:26, 1:21, 2:15, 3:32, 4:19, 5:20, 6:7, 7:9, 8:14, 9:18,
+                            10:255, 11:0, 12:0, 13:2, 14:6, 15:4, 16:5, 17:3, 18:1, 19:255}
+
+cityscapes_to_custom_cocoStuff_11_dict = {0:0, 1:1, 2:2, 3:8, 4:8, 5:3, 6:4, 7:5, 8:6, 9:7,
+                            10:10, 11:9, 12:9, 13:9, 14:9, 15:9, 16:9, 17:9, 18:9, 19:10}
+
+cityscapes_to_custom_cocoStuff_35_dict_deprecated = {0:27, 1:22, 2:16, 3:33, 4:20, 5:21, 6:8, 7:10, 8:15, 9:19,
                             10:0, 11:1, 12:1, 13:3, 14:7, 15:5, 16:6, 17:4, 18:2, 19:0}
 
 custom_mapping_dicts = {
     '53': cityscape_to_custom_cocoStuff_53_dict,
-    '35': cityscapes_to_custom_cocoStuff_35_dict
+    '35': cityscapes_to_custom_cocoStuff_35_dict,
+    '11': cityscapes_to_custom_cocoStuff_11_dict,
+    '35_deprecated': cityscapes_to_custom_cocoStuff_35_dict_deprecated
 }
 
 def get_cityscapes_num_classes(is_custom=False, custom_mapping_dict_key=None):
@@ -41,6 +49,8 @@ def get_cityscapes_num_classes(is_custom=False, custom_mapping_dict_key=None):
         # Basic cases
         if custom_mapping_dict_key == '53': return 53
         elif custom_mapping_dict_key == '35': return 35
+        elif custom_mapping_dict_key == '11': return 11
+        elif custom_mapping_dict_key == '35_deprecated': return 35  # Deprecated version
     # else:
     return len(CITYSCAPE_CLASS_LIST)  # Default number of classes in Cityscapes without custom mapping
 
