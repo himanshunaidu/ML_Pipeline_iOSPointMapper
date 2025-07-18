@@ -4,7 +4,7 @@
   "weights_test": "model/semantic_segmentation/model_zoo/bisenetv2/model_final_coco_ios_point_mapper.pth",
   "s": 2.0,
   "dataset": "ios_point_mapper",
-  "data_path": "./datasets/ios_point_mapper/iOSPointMapper_1_Cityscapes_2",
+  "data_path": "./datasets/ios_point_mapper",
   "im_size": [640, 640],
   "split": "val",
   "batch_size": 1,
