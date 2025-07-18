@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose, ToTensor
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
-from data_loader.semantic_segmentation.edge_mapping_scripts.custom_maps import edge_mapping_to_cocoStuff_custom_53_dict, edge_mapping_to_cocoStuff_custom_35_dict
+from data_loader.semantic_segmentation.edge_mapping_scripts.custom_maps import edge_mapping_to_cocoStuff_custom_53_dict, edge_mapping_to_cocoStuff_custom_35_dict, \
+    edge_mapping_to_cocoStuff_custom_35_dict_deprecated
 
 EDGE_MAPPING_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
@@ -14,7 +15,8 @@ EDGE_MAPPING_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pol
 
 custom_mapping_dicts = {
     '53': edge_mapping_to_cocoStuff_custom_53_dict,
-    '35': edge_mapping_to_cocoStuff_custom_35_dict
+    '35': edge_mapping_to_cocoStuff_custom_35_dict,
+    '35_deprecated': edge_mapping_to_cocoStuff_custom_35_dict_deprecated
 }
 
 def get_edge_mapping_num_classes(is_custom=False, custom_mapping_dict_key=None):
@@ -28,6 +30,7 @@ def get_edge_mapping_num_classes(is_custom=False, custom_mapping_dict_key=None):
         # Basic cases
         if custom_mapping_dict_key == '53': return 53
         elif custom_mapping_dict_key == '35': return 35
+        elif custom_mapping_dict_key == '35_deprecated': return 35  # Deprecated version
     # else:
     return 20  # Default number of classes in Edge Mapping without custom mapping
 

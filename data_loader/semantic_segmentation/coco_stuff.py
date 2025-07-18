@@ -7,14 +7,18 @@ if __name__ == '__main__':
     sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from transforms.semantic_segmentation.data_transforms import RandomFlip, RandomCrop, RandomScale, Normalize, Resize, Compose, ToTensor
 from transforms.semantic_segmentation.data_transforms import MEAN, STD
-from data_loader.semantic_segmentation.cocostuff_scripts.custom_maps import cocoStuff_continuous_53_dict, cocoStuff_continuous_35_dict, cocoStuff_cityscapes_dict
+from data_loader.semantic_segmentation.cocostuff_scripts.custom_maps import cocoStuff_continuous_53_dict, cocoStuff_continuous_35_dict, cocoStuff_cityscapes_dict, \
+    cocoStuff_continuous_11_dict, cocoStuff_continuous_9_dict, cocoStuff_continuous_35_dict_deprecated
 import numpy as np
 
 # Custom mapping dictionary for COCOStuff
 custom_mapping_dicts = {
     'city': cocoStuff_cityscapes_dict,
     '53': cocoStuff_continuous_53_dict,
-    '35': cocoStuff_continuous_35_dict
+    '35': cocoStuff_continuous_35_dict,
+    '11': cocoStuff_continuous_11_dict,
+    '9': cocoStuff_continuous_9_dict,
+    '35_deprecated': cocoStuff_continuous_35_dict_deprecated
 }
 
 def get_cocoStuff_num_classes(is_custom=False, custom_mapping_dict_key=None):
@@ -29,6 +33,9 @@ def get_cocoStuff_num_classes(is_custom=False, custom_mapping_dict_key=None):
         if custom_mapping_dict_key == '53': return 53
         elif custom_mapping_dict_key == '35': return 35
         elif custom_mapping_dict_key == 'city': return 19  # For cityscapes mapping
+        elif custom_mapping_dict_key == '11': return 11
+        elif custom_mapping_dict_key == '9': return 9
+        elif custom_mapping_dict_key == '35_deprecated': return 35  # Deprecated version
     # else:
     return 182  # Default number of classes in COCOStuff without custom mapping
 
