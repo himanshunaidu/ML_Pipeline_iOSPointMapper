@@ -68,8 +68,8 @@ if __name__ == '__main__':
         mean=(0.0, 0.0, 0.0), # placeholder
         std=(1.0, 1.0, 1.0),
     )
-    scale = 1/(0.2125*255.0)
-    bias = [- 0.3257/(0.2112) , - 0.3690/(0.2148), - 0.3223/(0.2115)]
+    scale = 1/(0.2766*255.0)
+    bias = [- 0.4696/(0.2747) , - 0.4464/(0.2701), - 0.4071/(0.2851)]
     print('Loading image:', args.img_path)
     im = cv2.imread(args.img_path)#[:, :, ::-1]
     # Resize
