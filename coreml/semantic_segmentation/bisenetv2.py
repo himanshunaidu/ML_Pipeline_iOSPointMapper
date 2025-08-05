@@ -94,6 +94,7 @@ if __name__ == '__main__':
         # compute_units=ct.ComputeUnit.CPU_AND_GPU
     )
 
-    ml_model_path = osp.join(args.out_pth, 'bisenetv2_{}_{}_{}.mlpackage'.format(args.num_classes, args.im_size[0], args.im_size[1]))
+    ml_model_path = osp.join(args.out_pth, 
+        'bisenetv2_{}_{}_{}_{}.mlpackage'.format(args.num_classes, args.im_size[0], args.im_size[1], osp.basename(args.weight_path)))
     ml_model.save(ml_model_path)
     print(f"Saved the model to {ml_model_path}")
