@@ -10,6 +10,7 @@ from typing import Optional, List, Tuple, Union
 import torch
 from PIL import Image
 from tqdm import tqdm
+import re
 
 from torch import nn
 from torchvision.transforms import functional as F
@@ -234,6 +235,28 @@ class NumpyEncoder(json.JSONEncoder):
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
         return super().default(obj)
+    
+class NumpyDecoder(json.JSONDecoder):
+    def __init__(self, *args, **kwargs):
+        super(NumpyDecoder, self).__init__(object_hook=self.numpy_hook, *args, **kwargs)
+
+    def numpy_hook(self, dct):
+        for key, value in dct.items():
+            if isinstance(value, list) and all(isinstance(i, (int, float)) for i in value):
+                dct[key] = np.array(value)
+            elif isinstance(value, str) and re.match(r'^\d+(\.\d+)?$', value):
+                # Convert numeric strings to float
+                try:
+                    dct[key] = float(value)
+                except ValueError:
+                    dct[key] = value
+            elif isinstance(value, str) and re.match(r'^\d+$', value):
+                # Convert integer strings to int
+                try:
+                    dct[key] = int(value)
+                except ValueError:
+                    dct[key] = value
+        return dct
 
 def get_metrics_table(results: dict) -> pd.DataFrame:
     """
@@ -407,7 +430,7 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
     df.to_csv(csv_file, index=False)
     print_info_message(f'Metrics saved to {csv_file}: \n{df.to_markdown(index=False)}')
         
-            
+
 def get_post_viz(args: TestConfig):
     """
     Generate post-processing visualizations such as AUC-ROC and Precision-Recall curves.

@@ -22,17 +22,19 @@ Class, IoU, Precision, Recall
 """
 
 csv_path_stem = [
-    "results_test/bisenetv2_*/*/*/*/*/*/post_metrics.csv",
-    "results_test/bisenetv2_*/*/*/*/*/*/*/post_metrics.csv"
+    # "results_test/bisenetv2_*/*/*/*/*/*/post_metrics.csv",
+    # "results_test/bisenetv2_*/*/*/*/*/*/*/post_metrics.csv"
+    "results_test/model_final_*/*/*/*/*/*/post_metrics.csv",
 ]
 # Example: results_test/bisenetv2_model_final_city/results_city_val/model_bisenetv2_city/split_val/s_2.0_sc_512_256/20250716-143444/post_metrics.csv
 # Pattern: results_test/bisenetv2_<identifier1>/<identifier2>/model_<model_name>_<dataset_name>/split_<split_name>/s_<scale>_sc_<im_size>/YYYYMMDD-HHMMSS/post_metrics.csv
+# Example: results_test/model_final_coco_combined_ios_point_mapper_finetuned/results_ios_point_mapper_val/model_bisenetv2_ios_point_mapper/split_val/s_2.0_sc_640_640/20250722-001237/post_metrics.csv
 
 # Regex pattern to extract the model name from the path
 # Example: results_test/bisenetv2_*/foo/bar/MODEL_NAME/...
 identifiers_regrex_1 = re.compile(
     r"results_test/"
-    r"bisenetv2_(?P<identifier1>[^/]+)/"
+    r"model_final_(?P<identifier1>[^/]+)/"
     r"(?P<identifier2>[^/]+)/"
     r"model_(?P<model_name>[^_]+)_(?P<dataset_name>[^/]+)/"
     r"split_(?P<split_name>[^/]+)/"
@@ -42,7 +44,7 @@ identifiers_regrex_1 = re.compile(
 )
 identifiers_regrex_2 = re.compile(
     r"results_test/"
-    r"bisenetv2_(?P<identifier1>[^/]+)/"
+    r"model_final_(?P<identifier1>[^/]+)/"
     r"(?P<identifier_2>[^/]+)/"
     r"(?P<identifier_null>[^/]+)/"
     r"model_(?P<model_name>[^_]+)_(?P<dataset_name>[^/]+)/"
@@ -91,6 +93,12 @@ def process_post_metrics_csv(csv_path):
         "Recall": "Recall",
         "F1-score": "F1-score"
     })
+    
+    # Reduce precision of float columns
+    float_columns = ["IoU", "Precision", "Recall", "F1-score"]
+    for col in float_columns:
+        if col in new_df.columns:
+            new_df[col] = new_df[col].round(6)
     
     if model_details:
         new_df.insert(0, "Model Name", model_details["model_name"])
