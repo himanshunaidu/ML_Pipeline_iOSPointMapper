@@ -14,7 +14,7 @@ from utilities.post_process_file_utils import ResultsTest, common_target_classes
     create_csv_from_metrics, \
     get_radar_graph_for_classes, get_radar_graph_for_metrics_per_class, \
     get_auc_roc_pr_scores, get_auc_roc_curves, get_pr_curves, \
-    save_fuse_segmentation_images
+    save_fuse_segmentation_images, save_entropy_maps
 from utilities.main_file_utils import NumpyEncoder, NumpyDecoder
 
 results_test_mapillary_ios = ResultsTest(
@@ -119,9 +119,20 @@ if __name__ == "__main__":
     #         print(f"Precision-Recall curves for {class_name} saved.")
     # print("All AUC-ROC and Precision-Recall curves generated.")
     
-    results_test_list = results_test[::-1]
-    save_fuse_segmentation_images(
-        results_test_list=results_test_list,
-        target_dataset=("iOS", ["results_ios_point_mapper_val"]),
-        output_dir=os.path.join(results_test_mapillary_ios.output_dir, 'fuse_segmentation_images')
+    # results_test_list = results_test[::-1]
+    # save_fuse_segmentation_images(
+    #     results_test_list=results_test_list,
+    #     target_dataset=("iOS", ["results_ios_point_mapper_val"]),
+    #     output_dir=os.path.join(results_test_mapillary_ios.output_dir, 'fuse_segmentation_images')
+    # )
+    
+    # Save the entropy maps for each model
+    # target_dataset = ("Combined", ["results_edge_mapping_ios_val", "results_ios_point_mapper_val"])
+    target_dataset = ("iOS", ["results_ios_point_mapper_val"])
+    # for result_args in results_test:
+    entropy_output_dir = os.path.join(results_test_mapillary_ios.output_dir, 'entropy_maps')
+    if not os.path.exists(entropy_output_dir):
+        os.makedirs(entropy_output_dir)
+    save_entropy_maps(results_test_mapillary_ios, target_dataset, 
+        output_dir=entropy_output_dir
     )

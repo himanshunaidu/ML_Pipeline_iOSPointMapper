@@ -660,3 +660,92 @@ def save_fuse_segmentation_images(results_test_list: list[ResultsTest], target_d
         output_file = os.path.join(output_dir, os.path.basename(input_file))
         stacked_image_pil.save(output_file)
         print_info_message(f"Saved fused segmentation image: {output_file}")
+
+def save_entropy_maps(results_test: ResultsTest, target_dataset: tuple[str, list[str]], output_dir: str) -> None:
+    """
+    Generates entropy maps for each input image using the predicted softmax probabilities.
+    """
+    def softmax(x, axis=-1):
+        x_max = np.max(x, axis=axis, keepdims=True)
+        e_x = np.exp(x - x_max)  # stability trick
+        return e_x / np.sum(e_x, axis=axis, keepdims=True)
+    
+    datasets = results_test.target_dataset_result_paths
+    if target_dataset[0] not in datasets:
+        print_error_message(f"Dataset {target_dataset[0]} not found in results.")
+        return
+    dataset_paths = datasets[target_dataset[0]]
+    
+    for dataset_path in dataset_paths:
+        print_info_message(f"Processing dataset: {dataset_path}")
+        input_dir = os.path.join(dataset_path, 'input')
+        logits_dir = os.path.join(dataset_path, 'pred_logits')
+        target_dir = os.path.join(dataset_path, 'target_rgb')
+        pred_dir = os.path.join(dataset_path, 'pred_rgb')
+
+        if not os.path.exists(logits_dir):
+            print_error_message('Logits directory does not exist: {}'.format(logits_dir))
+            continue
+
+        for logits_file_name in tqdm(os.listdir(logits_dir), total=len(os.listdir(logits_dir)), desc="Processing logits files"):
+            if not logits_file_name.endswith('.npy'):
+                continue
+
+            # To stack with the input image, target_rgb, and pred_rgb
+            input_file_name = logits_file_name.replace('pred_logits', 'input').replace('.npy', '.png')
+            input_image_path = os.path.join(input_dir, input_file_name)
+            if not os.path.exists(input_image_path):
+                print_warning_message(f"Input image {input_image_path} does not exist. Skipping.")
+                continue
+            input_image = Image.open(input_image_path)
+            input_image_array = np.array(input_image)
+            
+            target_rgb_file_name = logits_file_name.replace('pred_logits', 'target_rgb').replace('.npy', '.png')
+            target_rgb_path = os.path.join(target_dir, target_rgb_file_name)
+            if not os.path.exists(target_rgb_path):
+                print_warning_message(f"Target RGB image {target_rgb_path} does not exist. Skipping.")
+                continue
+            target_rgb_image = Image.open(target_rgb_path)
+            target_rgb_array = np.array(target_rgb_image)
+            
+            pred_rgb_file_name = logits_file_name.replace('pred_logits', 'pred_rgb').replace('.npy', '.png')
+            pred_rgb_path = os.path.join(pred_dir, pred_rgb_file_name)
+            if not os.path.exists(pred_rgb_path):
+                print_warning_message(f"Predicted RGB image {pred_rgb_path} does not exist. Skipping.")
+                continue
+            pred_rgb_image = Image.open(pred_rgb_path)
+            pred_rgb_array = np.array(pred_rgb_image)
+
+            # Load predicted logits
+            logits = np.load(os.path.join(logits_dir, logits_file_name))  # shape: [C, H, W]
+            if len(logits.shape) != 3:
+                print_warning_message(f"Skipping {logits_file_name} as it does not have the expected shape [C, H, W].")
+                continue
+
+            print("Shape and ranges of logits:", logits.shape, np.min(logits), np.max(logits))
+            
+            # Apply softmax to get probabilities
+            logits = np.transpose(logits, (1, 2, 0))  # shape: [H, W, C]
+            probs = softmax(logits, axis=-1)
+            
+            print("Shape and ranges of probabilities:", probs.shape, np.min(probs), np.max(probs))
+
+            # Calculate entropy
+            entropy = - np.sum(probs * np.log(probs + 1e-10), axis=-1)  # shape: [H, W]
+            print("Shape and ranges of entropy:", entropy.shape, np.min(entropy), np.max(entropy))
+            
+            # Normalize entropy to [0, 255]
+            entropy_normalized = (entropy - np.min(entropy)) / (np.max(entropy) - np.min(entropy)) * 255.0
+            print("Ranges of entropy:", np.min(entropy), np.max(entropy), "Normalized ranges:", np.min(entropy_normalized), np.max(entropy_normalized))
+            entropy_normalized = entropy_normalized.astype(np.uint8)  # shape: [H, W]
+            
+            # Stack the input, target_rgb, pred_rgb and entropy map horizontally
+            entropy_colored = np.stack([entropy_normalized] * 3, axis=-1)  # shape: [H, W, 3]
+            print("Shape of entropy_colored:", entropy_colored.shape)
+            stacked_image = np.hstack((input_image_array, target_rgb_array, pred_rgb_array, entropy_colored))
+            stacked_image_pil = Image.fromarray(stacked_image)
+            
+            # Save the stacked image
+            output_file = os.path.join(output_dir, logits_file_name.replace('.npy', '.png'))
+            stacked_image_pil.save(output_file)
+            print_info_message(f"Saved entropy map for {logits_file_name} at {output_file}")
