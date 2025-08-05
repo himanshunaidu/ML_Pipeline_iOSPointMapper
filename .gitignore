@@ -35,6 +35,7 @@ results*
 /results_test/*
 /results_test_coreml/*
 /results_test_executorch/*
+/results_confidence/*
 
 # Note: The following content has been pulled from https://github.com/jupyter/notebook
 *.bundle.*
