@@ -6,8 +6,8 @@ mkdir -p $data_dir
 cd $data_dir
 
 # enter user details
-uname='' #
-pass=''
+uname='hnaidu36@uw.edu' #
+pass='1234Five@'
 
 wget --keep-session-cookies --save-cookies=cookies.txt --post-data 'username='$uname'&password='$pass'&submit=Login' https://www.cityscapes-dataset.com/login/
 wget --load-cookies cookies.txt --content-disposition https://www.cityscapes-dataset.com/file-handling/?packageID=1
