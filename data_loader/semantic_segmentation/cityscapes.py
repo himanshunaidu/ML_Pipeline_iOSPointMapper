@@ -15,6 +15,9 @@ CITYSCAPE_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
 CITYSCAPE_TRAIN_CMAP = {
     label.trainId: label.color for index, label in enumerate(labels)
 }
+# train_id_map = {'road': 0, 'sidewalk': 1, 'building': 2, 'wall': 3, 'fence': 4, 'pole': 5, 
+# 'traffic light': 6, 'traffic sign': 7, 'vegetation': 8, 'terrain': 9, 'sky': 10, 'person': 11,
+# 'rider': 12, 'car': 13, 'truck': 14, 'bus': 15, 'train': 16, 'motorcycle': 17, 'bicycle': 18, 'background': 19}
 
 # Mapping from cityscapes classes to **custom** cocostuff classes
 ## This customization of cocostuff classes comes from edge mapping repository
@@ -27,6 +30,11 @@ cityscapes_to_custom_cocoStuff_35_dict = {0:26, 1:21, 2:15, 3:32, 4:19, 5:20, 6:
 
 cityscapes_to_custom_cocoStuff_11_dict = {0:0, 1:1, 2:2, 3:8, 4:8, 5:3, 6:4, 7:5, 8:6, 9:7,
                             10:10, 11:9, 12:9, 13:9, 14:9, 15:9, 16:9, 17:9, 18:9, 19:10}
+# cityscapes_to_custom_cocoStuff_11_dict = {'road': 'road', 'sidewalk': 'sidewalk', 'building': 'building', 
+# 'wall': 'static', 'fence': 'static', 'pole': 'pole', 'traffic light': 'traffic_light',
+# 'traffic sign': 'traffic_sign', 'vegetation': 'vegetation', 'terrain': 'terrain', 
+# 'sky': 'background', 'person': 'dynamic', 'rider': 'dynamic', 'car': 'dynamic', 'truck': 'dynamic',
+# 'bus': 'dynamic', 'train': 'dynamic', 'motorcycle': 'dynamic', 'bicycle': 'dynamic', 'background': 'background'}
 
 cityscapes_to_custom_cocoStuff_35_dict_deprecated = {0:27, 1:22, 2:16, 3:33, 4:20, 5:21, 6:8, 7:10, 8:15, 9:19,
                             10:0, 11:1, 12:1, 13:3, 14:7, 15:5, 16:6, 17:4, 18:2, 19:0}

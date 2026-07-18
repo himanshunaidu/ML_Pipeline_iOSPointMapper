@@ -9,12 +9,12 @@ from collections import namedtuple
 
 DATASET_PATH = "../../../datasets/coco_stuff/coco"
 
-IMAGE_DIR_PATH = os.path.join(DATASET_PATH, "images/train2017")
-LABEL_DIR_PATH = os.path.join(DATASET_PATH, "annotations/train2017")
+IMAGE_DIR_PATH = os.path.join(DATASET_PATH, "images/val2017")
+LABEL_DIR_PATH = os.path.join(DATASET_PATH, "annotations/val2017")
 LABELS = glob.glob(LABEL_DIR_PATH + "/*.png")
 
-TARGET_IMAGE_DIR_PATH = os.path.join(DATASET_PATH, "coco_subset/images/train2017")
-TARGET_LABEL_DIR_PATH = os.path.join(DATASET_PATH, "coco_subset/annotations/train2017")
+TARGET_IMAGE_DIR_PATH = os.path.join(DATASET_PATH, "coco_subset/images/val2017")
+TARGET_LABEL_DIR_PATH = os.path.join(DATASET_PATH, "coco_subset/annotations/val2017")
 print(f"Target image directory: {TARGET_IMAGE_DIR_PATH}")
 print(f"Target label directory: {TARGET_LABEL_DIR_PATH}")
 
