@@ -26,6 +26,7 @@ class TestConfig(BaseModel):
 
     is_custom: bool = Field(default=False, description='Whether to use a custom label mapping')
     custom_mapping_dict_key: Optional[str] = Field(default=None, description='Key for custom mapping dictionary')
+    custom_mapping_spec_key: Optional[str] = Field(default=None, description='Key for custom mapping specification')
 
     # Output details
     # num_classes: int = Field(default=19, description='Number of output classes')

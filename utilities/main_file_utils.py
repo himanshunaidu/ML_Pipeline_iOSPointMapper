@@ -63,8 +63,12 @@ def get_dataset_config(args: TestConfig) -> tuple[data.Dataset, int, list, list]
         dataset = iOSPointMapperDataset(root=args.data_path, train=False, scale=args.s,
                                         size=args.im_size, ignore_idx=255,
                                         mean=[0, 0, 0], std=[1, 1, 1],
-                                        is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
-        seg_classes = get_ios_point_mapper_num_classes(is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key)
+                                        is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key,
+                                        custom_mapping_spec_key=args.custom_mapping_spec_key)
+        seg_classes = get_ios_point_mapper_num_classes(
+            is_custom=args.is_custom, custom_mapping_dict_key=args.custom_mapping_dict_key,
+            custom_mapping_spec_key=args.custom_mapping_spec_key
+        )
         mean, std = get_ios_point_mapper_mean_std()
     elif args.dataset == 'pascal':
         # print_error_message('Pascal dataset not yet supported in this script')

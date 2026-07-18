@@ -10,6 +10,12 @@ from data_loader.semantic_segmentation.ios_point_mapper_scripts.custom_maps impo
     ios_point_mapper_to_cocoStuff_custom_35_dict, ios_point_mapper_to_cocoStuff_custom_11_dict, \
     ios_point_mapper_to_cocoStuff_custom_9_dict, ios_point_mapper_to_cityscapes_dict, \
     ios_point_mapper_to_cocoStuff_custom_35_dict_deprecated
+if __name__ == '__main__':
+    import sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from data_loader.semantic_segmentation.mappings.builder import MappingSpec, MappingBuilder
+from data_loader.semantic_segmentation.mappings.ios_point_mapper import IOS_POINT_MAPPER_ACCESSIBILITY_11, IOS_POINT_MAPPER_ACCESSIBILITY_12, \
+    IOS_POINT_MAPPER_ACCESSIBILITY_13, IOS_POINT_MAPPER_ACCESSIBILITY_3_CURB_RAMP
 
 # IOS_POINT_MAPPER_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
 #                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
@@ -24,21 +30,31 @@ custom_mapping_dicts = {
     '35_deprecated': ios_point_mapper_to_cocoStuff_custom_35_dict_deprecated
 }
 
-def get_ios_point_mapper_num_classes(is_custom=False, custom_mapping_dict_key=None):
+custom_mapping_specs: dict[str, MappingSpec] = {
+    'accessibility_11': IOS_POINT_MAPPER_ACCESSIBILITY_11,
+    'accessibility_12': IOS_POINT_MAPPER_ACCESSIBILITY_12,
+    'accessibility_13': IOS_POINT_MAPPER_ACCESSIBILITY_13,
+    'accessibility_3_curb_ramp': IOS_POINT_MAPPER_ACCESSIBILITY_3_CURB_RAMP
+}
+
+def get_ios_point_mapper_num_classes(
+    is_custom=False, *,
+    custom_mapping_dict_key=None, custom_mapping_spec_key=None
+):
     """
     Returns the number of classes in the iOSPointMapper dataset.
-    If is_custom is True, it returns the number of classes based on the custom mapping dictionary.
+    If is_custom is True, it returns the number of classes based on the custom mapping dictionary or custom mapping specification.
     """
     if is_custom:
-        assert custom_mapping_dict_key is not None, "Custom mapping dictionary key must be provided when is_custom is True."
-        custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '35'
-        # Basic cases
-        # if custom_mapping_dict_key == '53': return 53
-        if custom_mapping_dict_key == '35': return 35
-        if custom_mapping_dict_key == '11': return 11
-        if custom_mapping_dict_key == '9': return 9
-        if custom_mapping_dict_key == 'city': return 20
-        if custom_mapping_dict_key == '35_deprecated': return 35  # Deprecated version
+        if custom_mapping_spec_key is not None and custom_mapping_spec_key in custom_mapping_specs:
+            return custom_mapping_specs[custom_mapping_spec_key].n_classes
+        if custom_mapping_dict_key is not None:
+            if custom_mapping_dict_key == '35': return 35
+            if custom_mapping_dict_key == '11': return 11
+            if custom_mapping_dict_key == '9': return 9
+            if custom_mapping_dict_key == 'city': return 20
+            if custom_mapping_dict_key == '35_deprecated': return 35  # Deprecated version
+        raise ValueError("Custom mapping key must be provided when is_custom is True.")
     # else:
     return len(ios_point_mapper_dict.keys())  # Default number of classes in iOSPointMapper without custom mapping
 
@@ -60,7 +76,7 @@ class iOSPointMapperDataset(data.Dataset):
 
     def __init__(self, root, train=False, scale=(0.5, 2.0), size=(1024, 512), ignore_idx=255,
                  *, mean=MEAN, std=STD,
-                 is_custom=False, custom_mapping_dict_key=None):
+                 is_custom=False, custom_mapping_dict_key=None, custom_mapping_spec_key=None):
         """
         Initialize the dataset class.
 
@@ -116,10 +132,57 @@ class iOSPointMapperDataset(data.Dataset):
         self.ignore_idx = ignore_idx
 
         self.is_custom = is_custom
-        assert not is_custom or custom_mapping_dict_key is not None, "Custom mapping dictionary should be provided when is_custom is True."
-        custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
-        self.custom_mapping_dict = custom_mapping_dicts[custom_mapping_dict_key] if custom_mapping_dict_key in custom_mapping_dicts else None
+        if self.is_custom:
+            self.lb_map = self._get_custom_mappings(custom_mapping_spec_key=custom_mapping_spec_key, custom_mapping_dict_key=custom_mapping_dict_key)
+            
+        # assert not is_custom or custom_mapping_dict_key is not None, "Custom mapping dictionary should be provided when is_custom is True."
+        # custom_mapping_dict_key = custom_mapping_dict_key if custom_mapping_dict_key is not None else '53'
+        # self.custom_mapping_dict = custom_mapping_dicts[custom_mapping_dict_key] if custom_mapping_dict_key in custom_mapping_dicts else None
 
+    def _get_custom_mappings(self, *, custom_mapping_spec_key=None, custom_mapping_dict_key=None):
+        if custom_mapping_spec_key is not None and custom_mapping_spec_key in custom_mapping_specs:
+            return self._get_custom_mapping_from_spec(custom_mapping_spec_key)
+        if custom_mapping_dict_key is not None and custom_mapping_dict_key in custom_mapping_dicts:
+            return self._get_custom_mapping_from_dict_key(custom_mapping_dict_key)
+        raise ValueError("No valid custom mapping specification or dictionary key provided.")
+    
+    def _get_custom_mapping_from_spec(self, spec_key):
+        """
+        Returns the custom mapping dictionary based on the provided spec key.
+        """
+        if spec_key not in custom_mapping_specs:
+            raise ValueError(f"Invalid custom mapping spec key: {spec_key}. "
+                             f"Available keys are: {list(custom_mapping_specs.keys())}")
+        mapping_spec = custom_mapping_specs[spec_key]
+        # Create a mapping dictionary from the mapping specification
+        lb_map = mapping_spec.compile_label_map()
+        return lb_map
+    
+    def _get_custom_mapping_from_dict(self, mapping_dict):
+        """
+        Returns the custom mapping dictionary based on the provided mapping dictionary.
+        """
+        if not isinstance(mapping_dict, dict):
+            raise ValueError(f"Invalid custom mapping dictionary: {mapping_dict}. "
+                             f"Expected a dictionary.")
+        lb_map = np.arange(256)
+        for ind in range(256):
+            if ind in mapping_dict.keys():
+                lb_map[ind] = mapping_dict[ind]
+            else:
+                lb_map[ind] = self.lb_ignore
+        return lb_map
+    
+    def _get_custom_mapping_from_dict_key(self, dict_key):
+        """
+        Returns the custom mapping dictionary based on the provided dictionary key.
+        """
+        if dict_key not in custom_mapping_dicts:
+            raise ValueError(f"Invalid custom mapping dictionary key: {dict_key}. "
+                             f"Available keys are: {list(custom_mapping_dicts.keys())}")
+        custom_mapping_dict = custom_mapping_dicts[dict_key]
+        return self._get_custom_mapping_from_dict(custom_mapping_dict)
+    
     def transforms(self):
         train_transforms = Compose(
             [
@@ -159,10 +222,14 @@ class iOSPointMapperDataset(data.Dataset):
         mask = np.array(mask, dtype=np.uint8)
 
         ##################  For tuning on our custom data
-        if self.is_custom and self.custom_mapping_dict is not None:
-            new_mask = np.zeros_like(mask)
-            for k, v in self.custom_mapping_dict.items():
-                new_mask[mask == k] = v
+        # if self.is_custom and self.custom_mapping_dict is not None:
+        #     new_mask = np.zeros_like(mask)
+        #     for k, v in self.custom_mapping_dict.items():
+        #         new_mask[mask == k] = v
+        #     mask = new_mask
+        if self.is_custom and self.lb_map is not None:
+            # lb_map is a numpy array mapping old labels to new labels
+            new_mask = self.lb_map[mask]
             mask = new_mask
         
         return Image.fromarray(mask)

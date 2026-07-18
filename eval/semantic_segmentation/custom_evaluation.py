@@ -10,12 +10,21 @@ from eval.semantic_segmentation.metrics.dice import Dice
 from eval.semantic_segmentation.metrics.f1 import F1Score
 from eval.semantic_segmentation.metrics.persello import Persello
 from eval.semantic_segmentation.metrics.rom_rum import ROMRUM
-from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, cityscapesIdToClassMap
-from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
+# from eval.semantic_segmentation.metrics.old.persello import segmentation_score_Persello as Persello_old, cityscapesIdToClassMap
+# from eval.semantic_segmentation.metrics.old.rom_rum import rom_rum as ROMRUM_old
 
 class CustomEvaluation:
     """
     Custom evaluation class for evaluating the results of a semantic segmentation experiment.
+    
+    Arguments:
+    - num_classes: Number of classes in the segmentation task.
+    - max_regions: Maximum number of regions for ROM/RUM calculation.
+    - is_output_probabilities: Whether the model outputs probabilities.
+    # - idToClassMap: Mapping from class IDs to class names. (Note: Not used for evaluation, only for reference.)
+    - miou_min_range: Minimum range for mIoU calculation.
+    - miou_max_range: Maximum range for mIoU calculation.
+    - args: Additional arguments.
 
     Metrics to be calculated:
     - Mean Intersection over Union (mIoU)
@@ -26,7 +35,7 @@ class CustomEvaluation:
     Also calculates the time required to calculate the metrics.
     """
     def __init__(self, *, num_classes, max_regions=1024, is_output_probabilities=True, 
-                 idToClassMap=cityscapesIdToClassMap,
+                #  idToClassMap=cityscapesIdToClassMap,
                  miou_min_range=1, miou_max_range=None,
                  args):
         """
@@ -37,7 +46,7 @@ class CustomEvaluation:
         self.is_output_probabilities = is_output_probabilities
         self.num_classes = num_classes
         self.max_regions = max_regions
-        self.idToClassMap = idToClassMap
+        # self.idToClassMap = idToClassMap
         self.miou_min_range = miou_min_range
         self.miou_max_range = miou_max_range if miou_max_range is not None else num_classes
 
@@ -193,35 +202,35 @@ class CustomEvaluation:
         # Exit early since old metrics are not needed
         return
 
-        ## Before calculating the old versions, we need to convert the output and target tensors
-        # to numpy arrays and map the class indices to the old class indices
-        pred_pre_old, target_pre_old = self.preprocess_for_old_metrics(output, target)
+        # ## Before calculating the old versions, we need to convert the output and target tensors
+        # # to numpy arrays and map the class indices to the old class indices
+        # pred_pre_old, target_pre_old = self.preprocess_for_old_metrics(output, target)
 
-        # Calculate Persello (Old)
-        persello_old_start_time = time.time()
-        persello_old_over, persello_old_under = 0, 0
-        for class_id in self.idToClassMap.keys():
-            persello_old_over_c, persello_old_under_c = Persello_old(target_pre_old, pred_pre_old, class_id)
-            persello_old_over += persello_old_over_c
-            persello_old_under += persello_old_under_c
-        self.persello_old_over_list.append(persello_old_over)
-        self.persello_old_under_list.append(persello_old_under)
-        self.persello_old_over_meter.update(persello_old_over/len(self.idToClassMap.keys()))
-        self.persello_old_under_meter.update(persello_old_under/len(self.idToClassMap.keys()))
-        self.persello_old_times.append(time.time() - persello_old_start_time)
+        # # Calculate Persello (Old)
+        # persello_old_start_time = time.time()
+        # persello_old_over, persello_old_under = 0, 0
+        # for class_id in self.idToClassMap.keys():
+        #     persello_old_over_c, persello_old_under_c = Persello_old(target_pre_old, pred_pre_old, class_id)
+        #     persello_old_over += persello_old_over_c
+        #     persello_old_under += persello_old_under_c
+        # self.persello_old_over_list.append(persello_old_over)
+        # self.persello_old_under_list.append(persello_old_under)
+        # self.persello_old_over_meter.update(persello_old_over/len(self.idToClassMap.keys()))
+        # self.persello_old_under_meter.update(persello_old_under/len(self.idToClassMap.keys()))
+        # self.persello_old_times.append(time.time() - persello_old_start_time)
 
-        # Calculate ROM/RUM (Old)
-        romrum_old_start_time = time.time()
-        romrum_old_over, romrum_old_under = 0, 0
-        for class_id in self.idToClassMap.keys():
-            romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_pre_old, pred_pre_old, class_id)
-            romrum_old_over += romrum_old_over_c
-            romrum_old_under += romrum_old_under_c
-        self.romrum_old_over_list.append(romrum_old_over)
-        self.romrum_old_under_list.append(romrum_old_under)
-        self.romrum_old_over_meter.update(romrum_old_over/len(self.idToClassMap.keys()))
-        self.romrum_old_under_meter.update(romrum_old_under/len(self.idToClassMap.keys()))
-        self.romrum_old_times.append(time.time() - romrum_old_start_time)
+        # # Calculate ROM/RUM (Old)
+        # romrum_old_start_time = time.time()
+        # romrum_old_over, romrum_old_under = 0, 0
+        # for class_id in self.idToClassMap.keys():
+        #     romrum_old_over_c, romrum_old_under_c = ROMRUM_old(target_pre_old, pred_pre_old, class_id)
+        #     romrum_old_over += romrum_old_over_c
+        #     romrum_old_under += romrum_old_under_c
+        # self.romrum_old_over_list.append(romrum_old_over)
+        # self.romrum_old_under_list.append(romrum_old_under)
+        # self.romrum_old_over_meter.update(romrum_old_over/len(self.idToClassMap.keys()))
+        # self.romrum_old_under_meter.update(romrum_old_under/len(self.idToClassMap.keys()))
+        # self.romrum_old_times.append(time.time() - romrum_old_start_time)
 
     def get_results(self):
         """

@@ -66,13 +66,15 @@ def test(args: TestConfig, model, dataset_loader: torch.utils.data.DataLoader, d
     args.cmap = get_cmap(args)   
 
     custom_eval = CustomEvaluation(num_classes=args.classes, max_regions=1024, is_output_probabilities=True, 
-                                   idToClassMap=cityscapesIdToClassMap, args=args)
+                                #    idToClassMap=cityscapesIdToClassMap, 
+                                   args=args)
     
     # Also get custom evaluation metrics per class
     # This will take in non-probability outputs to make the evaluation easier
     custom_eval_per_class = {
         eval_class: CustomEvaluation(num_classes=1, max_regions=1024, is_output_probabilities=False,
-                         idToClassMap={0: 'road'}, miou_min_range=1, miou_max_range=2,
+                        #  idToClassMap={0: 'road'}, 
+                         miou_min_range=1, miou_max_range=2,
                          args=args) for eval_class in args.eval_classes
     }
 
