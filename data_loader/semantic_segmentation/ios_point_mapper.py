@@ -15,7 +15,7 @@ if __name__ == '__main__':
     sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from data_loader.semantic_segmentation.mappings.builder import MappingSpec, MappingBuilder
 from data_loader.semantic_segmentation.mappings.ios_point_mapper import IOS_POINT_MAPPER_ACCESSIBILITY_11, IOS_POINT_MAPPER_ACCESSIBILITY_12, \
-    IOS_POINT_MAPPER_ACCESSIBILITY_13, IOS_POINT_MAPPER_ACCESSIBILITY_3_CURB_RAMP
+    IOS_POINT_MAPPER_ACCESSIBILITY_13, IOS_POINT_MAPPER_ACCESSIBILITY_3_CURB_RAMP, IOS_POINT_MAPPER_CITY
 
 # IOS_POINT_MAPPER_CLASS_LIST = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign',
 #                         'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle',
@@ -34,7 +34,8 @@ custom_mapping_specs: dict[str, MappingSpec] = {
     'accessibility_11': IOS_POINT_MAPPER_ACCESSIBILITY_11,
     'accessibility_12': IOS_POINT_MAPPER_ACCESSIBILITY_12,
     'accessibility_13': IOS_POINT_MAPPER_ACCESSIBILITY_13,
-    'accessibility_3_curb_ramp': IOS_POINT_MAPPER_ACCESSIBILITY_3_CURB_RAMP
+    'accessibility_3_curb_ramp': IOS_POINT_MAPPER_ACCESSIBILITY_3_CURB_RAMP,
+    'city': IOS_POINT_MAPPER_CITY
 }
 
 def get_ios_point_mapper_num_classes(

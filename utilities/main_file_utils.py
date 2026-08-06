@@ -112,19 +112,21 @@ def get_default_weights_test(args: TestConfig) -> str:
 
 def get_save_dir(args: TestConfig) -> str:
     savedir = ''
+    # Get the name of the weights file without extension
+    weights_file_name = os.path.splitext(os.path.basename(args.weights_test))[0] if args.weights_test else 'unknown'
     # set-up results path
     if args.dataset == 'city':
-        savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
+        savedir = 'results_test/{}/{}_{}_{}'.format(weights_file_name, 'results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping': # MARK: edge mapping dataset
-        savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
+        savedir = 'results_test/{}/{}_{}_{}'.format(weights_file_name, 'results', args.dataset, args.split)
     elif args.dataset == 'edge_mapping_ios': # MARK: edge mapping dataset
-        savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
+        savedir = 'results_test/{}/{}_{}_{}'.format(weights_file_name, 'results', args.dataset, args.split)
     elif args.dataset == 'ios_point_mapper':
-        savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
+        savedir = 'results_test/{}/{}_{}_{}'.format(weights_file_name, 'results', args.dataset, args.split)
     elif args.dataset == 'pascal':
         savedir = 'results_test/{}_{}/VOC2012/Segmentation/comp6_{}_cls'.format('results', args.dataset, args.split)
     elif args.dataset == 'coco_stuff':
-        savedir = 'results_test/{}_{}_{}'.format('results', args.dataset, args.split)
+        savedir = 'results_test/{}/{}_{}_{}'.format(weights_file_name, 'results', args.dataset, args.split)
     else:
         # print_error_message('{} dataset not yet supported'.format(args.dataset))
         raise NotImplementedError('Dataset {} not implemented'.format(args.dataset))
@@ -350,11 +352,18 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
             # Load corresponding ground truth mask
             gt_mask = np.array(Image.open(os.path.join(target_dir, target_file_name)))  # shape: [H, W]
             
+            # MARK: Adding temporary correction
+            ignore_label = 255
+            valid = gt_mask != ignore_label
+            pred_valid = pred_mask[valid]
+            gt_valid = gt_mask[valid]
+            
             # Create a mask that only contains the target class
-            pred_mask_target = (pred_mask == target_class).astype(np.uint8)
-            gt_mask_target = (gt_mask == target_class).astype(np.uint8)
+            pred_mask_target = (pred_valid == target_class).astype(np.uint8)
+            gt_mask_target = (gt_valid == target_class).astype(np.uint8)
             
             # NOTE: Skip if ground truth mask is empty
+            # NOTE 2: Let's not do that
             if np.sum(gt_mask_target) == 0: continue
             
             # Calculate True Positives, False Positives, True Negatives, False Negatives
@@ -364,12 +373,12 @@ def get_post_metrics(args: TestConfig) -> Tuple[str, str]:
             fn += np.sum((pred_mask_target == 0) & (gt_mask_target == 1))
         
         # Calculate metrics
-        precision = tp / (tp + fp) if tp + fp > 0 else 0.0
-        recall = tp / (tp + fn) if tp + fn > 0 else 0.0
-        specificity = tn / (tn + fp) if tn + fp > 0 else 0.0
+        precision = tp / (tp + fp + 1) if tp + fp > 0 else 0.0
+        recall = tp / (tp + fn + 1) if tp + fn > 0 else 0.0
+        specificity = tn / (tn + fp + 1) if tn + fp > 0 else 0.0
         # print_info_message(f"precision: {precision}, recall: {recall}, specificity: {specificity}")
-        f1_score = 2 * (precision * recall) / (precision + recall) if (tp + fn > 0 and tp + fp > 0) else 0.0
-        iou_score = tp / (tp + fp + fn) if (tp + fp + fn > 0) else 0.0
+        f1_score = 2 * (precision * recall) / (precision + recall + 1) if (tp + fn > 0 and tp + fp > 0) else 0.0
+        iou_score = tp / (tp + fp + fn + 1) if (tp + fp + fn > 0) else 0.0
         
         pixel_count = tp + fn # Total pixels in the target class
         

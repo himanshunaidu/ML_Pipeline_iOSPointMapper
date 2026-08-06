@@ -12,7 +12,7 @@
   "model_height": 224,
   "channels": 3,
   "is_custom": true,
-  "custom_mapping_dict_key": "city",
+  "custom_mapping_spec_key": "city",
   "classes": 19,
   "savedir": "./results_segmentation_test",
   "eval_classes": [1, 2, 7, 6, 5],

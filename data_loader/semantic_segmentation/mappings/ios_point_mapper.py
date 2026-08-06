@@ -8,7 +8,7 @@ if __name__ == '__main__':
     sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 from data_loader.semantic_segmentation.taxonomies.common import SourceClass, ProjectClass
 from data_loader.semantic_segmentation.taxonomies.ios_point_mapper import iOSPointMapperClass
-from data_loader.semantic_segmentation.taxonomies.accessibility_class import AccessibilityClass, ACCESSIBILITY_11_CLASSES, ACCESSIBILITY_12_CLASSES, ACCESSIBILITY_13_CLASSES, ACCESSIBILITY_3_CURB_RAMP_CLASSES
+from data_loader.semantic_segmentation.taxonomies.accessibility_class import AccessibilityClass, ACCESSIBILITY_11_CLASSES, ACCESSIBILITY_12_CLASSES, ACCESSIBILITY_13_CLASSES, ACCESSIBILITY_3_CURB_RAMP_CLASSES, ACCESSIBILITY_CITYSCAPES_CLASSES
 from data_loader.semantic_segmentation.mappings.builder import MappingSpec, MappingBuilder
 
 IOS_POINT_MAPPER_ACCESSIBILITY_11: MappingSpec[iOSPointMapperClass, AccessibilityClass] = (
@@ -96,6 +96,26 @@ IOS_POINT_MAPPER_ACCESSIBILITY_3_CURB_RAMP: MappingSpec[iOSPointMapperClass, Acc
     .map_many([
         iOSPointMapperClass.CURB_RAMP, iOSPointMapperClass.TACTILE_PAVING # Mostly tactile pavings in the dataset are on curb ramps
     ], AccessibilityClass.CURB_RAMP)
+    .build()
+)
+
+IOS_POINT_MAPPER_CITY: MappingSpec[iOSPointMapperClass, AccessibilityClass] = (
+    MappingBuilder(
+        name="ios_point_mapper_city",
+        source_enum=iOSPointMapperClass,
+        target_enum=AccessibilityClass,
+        target_classes=ACCESSIBILITY_CITYSCAPES_CLASSES,  # Replace with the appropriate target classes for the city mapping
+    )
+    .map(iOSPointMapperClass.ROAD, AccessibilityClass.ROAD)
+    .map(iOSPointMapperClass.SIDEWALK, AccessibilityClass.SIDEWALK)
+    .map(iOSPointMapperClass.BUILDING, AccessibilityClass.BUILDING)
+    .map(iOSPointMapperClass.WALL, AccessibilityClass.WALL)
+    .map(iOSPointMapperClass.FENCE, AccessibilityClass.FENCE)
+    .map(iOSPointMapperClass.POLE, AccessibilityClass.POLE)
+    .map(iOSPointMapperClass.TRAFFIC_LIGHT, AccessibilityClass.TRAFFIC_LIGHT)
+    .map(iOSPointMapperClass.TRAFFIC_SIGN, AccessibilityClass.TRAFFIC_SIGN)
+    .map(iOSPointMapperClass.VEGETATION, AccessibilityClass.VEGETATION)
+    .map(iOSPointMapperClass.TERRAIN, AccessibilityClass.TERRAIN)
     .build()
 )
 

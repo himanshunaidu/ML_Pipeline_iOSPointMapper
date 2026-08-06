@@ -71,28 +71,44 @@ ios_point_mapper_to_cocoStuff_custom_11_dict = {0:10, 1:9, 2:255, 3:255, 4:2, 5:
     21:0, 22:1, 23:8, 24:8, 25:1, 26:7, 27:4, 28:5, 29:9, 30:9,
     31:255, 32:6, 33:8}
 
+# common_cmap_base = np.array([
+#     [128, 64, 128], # Road
+#     [244, 35,232], # Sidewalk
+#     [70, 70, 70],  # Building
+#     [153,153,153], # Pole
+#     [250,170, 30], # Traffic Light
+#     [220,220,  0], # Traffic Sign
+#     [107,142, 35], # Vegetation
+#     [152,251,152], # Terrain
+# ], dtype=np.uint8)
+common_cmap_base = np.array([
+    [0, 0, 0], # Background
+    [128, 64, 128], # Road
+    [244, 35, 232], # Sidewalk
+    [29, 66, 137], # Building
+    [0, 191, 178], # Pole
+    [211, 39, 62], # Traffic Light
+    [220, 88, 42], # Traffic Sign
+    [255, 200, 69], # Curb ramp
+    [107,142, 35], # Vegetation
+    [152,251,152], # Terrain
+])
+common_cmap = np.zeros((256, 3), dtype=np.uint8)
+common_cmap[:len(common_cmap_base)] = common_cmap_base
+
 cityscapes_cmap = np.zeros((256, 3), dtype=np.uint8)
 cityscapes_cmap[0] = [128, 64, 128]  # Road
 cityscapes_cmap[1] = [244, 35, 232]  # Sidewalk
-cityscapes_cmap[2] = [70, 70, 70]   # Building
-cityscapes_cmap[5] = [153, 153, 153]  # Pole
-cityscapes_cmap[6] = [250, 170, 30]  # Traffic Light
-cityscapes_cmap[7] = [220, 220, 0]  # Traffic Sign
+# cityscapes_cmap[2] = [70, 70, 70]   # Building
+cityscapes_cmap[2] = [29, 66, 137] # Building
+# cityscapes_cmap[5] = [153, 153, 153]  # Pole
+cityscapes_cmap[5] = [0, 191, 178] # Pole
+# cityscapes_cmap[6] = [250, 170, 30]  # Traffic Light
+cityscapes_cmap[6] = [211, 39, 62]  # Traffic Light
+# cityscapes_cmap[7] = [220, 220, 0]  # Traffic Sign
+cityscapes_cmap[7] = [255, 200, 69]  # Traffic Sign
 cityscapes_cmap[8] = [107, 142, 35]  # Vegetation
 cityscapes_cmap[9] = [152, 251, 152]  # Terrain
-
-common_cmap_base = np.array([
-    [128, 64, 128], # Road
-    [244, 35,232], # Sidewalk
-    [70, 70, 70],  # Building
-    [153,153,153], # Pole
-    [250,170, 30], # Traffic Light
-    [220,220,  0], # Traffic Sign
-    [107,142, 35], # Vegetation
-    [152,251,152], # Terrain
-], dtype=np.uint8)
-common_cmap = np.zeros((256, 3), dtype=np.uint8)
-common_cmap[:len(common_cmap_base)] = common_cmap_base
 
 def get_metrics_table(results: dict) -> pd.DataFrame:
     """
@@ -564,102 +580,294 @@ def get_pr_curves(model_results_for_plot: dict[str, dict], target_dataset: tuple
     
     return fig
 
-def save_fuse_segmentation_images(results_test_list: list[ResultsTest], target_dataset: tuple[str, list[str]], output_dir: str, *, 
-        cmap: np.ndarray = common_cmap, img_original_size: tuple[int, int] = (1440, 1920)) -> None:
-    """
-    Fuses segmentation images from multiple results_test objects into a single CSV file.
+# def save_fuse_segmentation_images(results_test_list: list[ResultsTest], target_dataset: tuple[str, list[str]], output_dir: str, *, 
+#         cmap: np.ndarray = common_cmap, img_original_size: tuple[int, int] = (1440, 1920),
+#         gap: int = 10) -> None:
+#     """
+#     Fuses segmentation images from multiple results_test objects into a single file.
     
+#     Args:
+#         results_test_list (list[ResultsTest]): List of ResultsTest objects containing the segmentation results.
+#         output_dir (str): Directory to save the fused segmentation images.
+#         cmap (np.ndarray): Colormap to use for visualizing the segmentation results.
+#         gap (int): Gap between the images
+#     """
+#     if len(results_test_list) == 0:
+#         print_error_message("No results_test objects provided for fusion.")
+#         return
+    
+#     if not os.path.exists(output_dir):
+#         os.makedirs(output_dir)
+
+#     last_results_test = results_test_list[-1]
+#     datasets = last_results_test.target_dataset_result_paths
+#     print(f"Available datasets in results: {list(datasets.keys())}")
+#     dataset_paths = datasets.get(target_dataset[0], [])
+#     if not dataset_paths:
+#         print_error_message(f"Dataset {target_dataset[0]} not found in results.")
+#         return
+    
+#     first_dataset_path = dataset_paths[0]
+#     # Get input and ground truth from the first results_test object
+#     input_dir = os.path.join(first_dataset_path, 'input')
+#     target_dir = os.path.join(first_dataset_path, 'target')
+    
+#     # Get all the prediction directories from all results_test objects
+#     pred_dirs = []
+#     for results_test in results_test_list:
+#         datasets = results_test.target_dataset_result_paths
+#         if target_dataset[0] not in datasets:
+#             continue
+#         dataset_paths = datasets[target_dataset[0]]
+#         for dataset_path in dataset_paths:
+#             pred_dir = os.path.join(dataset_path, 'pred')
+#             if os.path.exists(pred_dir):
+#                 pred_dirs.append(pred_dir)
+    
+#     input_files = sorted(os.listdir(input_dir))
+#     for input_file in tqdm(input_files, desc="Processing input files", total=len(input_files)):        
+#         # Load the original image
+#         input_image = Image.open(os.path.join(input_dir, input_file))
+#         input_image = input_image.resize(img_original_size, Image.BILINEAR)
+        
+#         target_file = os.path.join(target_dir, os.path.basename(input_file).replace('input', 'target'))
+#         target_image = Image.open(target_file)
+#         target_image = target_image.resize(img_original_size, Image.BILINEAR)
+#         target_image = np.array(target_image)
+        
+#         # Cmap the target image
+#         ## First, map the target image to the temporary ios_point_mapper_to_cocoStuff_custom_11_dict
+#         # target_image_new = np.zeros_like(target_image, dtype=np.uint8)
+#         # for key, value in ios_point_mapper_to_cocoStuff_custom_11_dict.items():
+#         #     target_image_new[target_image == key] = value
+#         # target_image = target_image_new
+#         target_image_colored = cmap[target_image].astype(np.uint8)  # shape: [H, W, 3]
+
+#         # Initialize a blank canvas for the fused segmentation
+#         fused_segmentation = np.zeros((img_original_size[1], img_original_size[0] * 3, len(pred_dirs)), dtype=np.uint8)
+
+#         # Process each prediction directory
+#         for pred_dir in pred_dirs:
+#             pred_file_path = os.path.join(pred_dir, os.path.basename(input_file).replace('input', 'pred'))
+#             if not os.path.exists(pred_file_path):
+#                 print_warning_message(f"Prediction file {pred_file_path} does not exist. Skipping.")
+#                 continue
+            
+#             # Load the predicted mask
+#             pred_mask = Image.open(pred_file_path)  # shape: [H, W]
+#             pred_mask = pred_mask.resize(img_original_size, Image.BILINEAR)
+#             pred_mask = np.array(pred_mask)
+            
+#             # Cmap the predicted mask to the number of classes
+#             ## Temp code to handle cityscapes
+#             if 'city' in pred_file_path:
+#                 pred_mask_colored = cityscapes_cmap[pred_mask].astype(np.uint8)  # shape: [H, W, 3]
+#             else:
+#                 pred_mask_colored = cmap[pred_mask].astype(np.uint8)  # shape: [H, W, 3]
+
+#             # Place the predicted mask in the correct col of the fused segmentation
+#             col_index = pred_dirs.index(pred_dir)
+#             fused_segmentation[:, col_index * img_original_size[0]:(col_index + 1) * img_original_size[0], :] = pred_mask_colored
+            
+
+#         # Stack the input image, target image, and fused segmentation vertically
+#         stacked_image = np.hstack((np.array(input_image), target_image_colored, fused_segmentation))
+#         stacked_image_pil = Image.fromarray(stacked_image)
+        
+#         # Save the stacked image
+#         output_file = os.path.join(output_dir, os.path.basename(input_file))
+#         stacked_image_pil.save(output_file)
+#         print_info_message(f"Saved fused segmentation image: {output_file}")
+
+def save_fuse_segmentation_images(
+    results_test_list: list[ResultsTest],
+    target_dataset: tuple[str, list[str]],
+    output_dir: str,
+    *,
+    cmap: np.ndarray = common_cmap,
+    img_original_size: tuple[int, int] = (1440, 1920),
+    gap: int = 10,
+) -> None:
+    """
+    Fuses the input image, ground-truth segmentation, and prediction
+    segmentations into a single horizontal image.
+
     Args:
-        results_test_list (list[ResultsTest]): List of ResultsTest objects containing the segmentation results.
-        output_dir (str): Directory to save the fused segmentation images.
-        cmap (np.ndarray): Colormap to use for visualizing the segmentation results.
+        results_test_list:
+            ResultsTest objects containing segmentation results.
+        target_dataset:
+            Tuple whose first element is the target dataset name.
+        output_dir:
+            Directory in which to save the fused images.
+        cmap:
+            Colormap used to visualize segmentation masks.
+        img_original_size:
+            Output image size as (width, height).
+        gap:
+            Number of pixels between adjacent images.
     """
-    if len(results_test_list) == 0:
-        print_error_message("No results_test objects provided for fusion.")
+    if not results_test_list:
+        print_error_message(
+            "No results_test objects provided for fusion."
+        )
         return
-    
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+
+    if gap < 0:
+        raise ValueError(f"gap must be non-negative, but received {gap}.")
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    dataset_name = target_dataset[0]
 
     last_results_test = results_test_list[-1]
     datasets = last_results_test.target_dataset_result_paths
+
     print(f"Available datasets in results: {list(datasets.keys())}")
-    dataset_paths = datasets.get(target_dataset[0], [])
+
+    dataset_paths = datasets.get(dataset_name, [])
     if not dataset_paths:
-        print_error_message(f"Dataset {target_dataset[0]} not found in results.")
+        print_error_message(
+            f"Dataset {dataset_name} not found in results."
+        )
         return
-    
+
     first_dataset_path = dataset_paths[0]
-    # Get input and ground truth from the first results_test object
-    input_dir = os.path.join(first_dataset_path, 'input')
-    target_dir = os.path.join(first_dataset_path, 'target')
-    
-    # Get all the prediction directories from all results_test objects
-    pred_dirs = []
+
+    # Use input and target images from the first available dataset result.
+    input_dir = os.path.join(first_dataset_path, "input")
+    target_dir = os.path.join(first_dataset_path, "target")
+
+    # Collect prediction directories from every ResultsTest object.
+    pred_dirs: list[str] = []
+
     for results_test in results_test_list:
-        datasets = results_test.target_dataset_result_paths
-        if target_dataset[0] not in datasets:
-            continue
-        dataset_paths = datasets[target_dataset[0]]
-        for dataset_path in dataset_paths:
-            pred_dir = os.path.join(dataset_path, 'pred')
-            if os.path.exists(pred_dir):
+        result_datasets = results_test.target_dataset_result_paths
+
+        for dataset_path in result_datasets.get(dataset_name, []):
+            pred_dir = os.path.join(dataset_path, "pred")
+
+            if os.path.isdir(pred_dir):
                 pred_dirs.append(pred_dir)
-    
+
+    if not os.path.isdir(input_dir):
+        print_error_message(f"Input directory does not exist: {input_dir}")
+        return
+
+    if not os.path.isdir(target_dir):
+        print_error_message(f"Target directory does not exist: {target_dir}")
+        return
+
+    image_width, image_height = img_original_size
+
+    # Vertical separator inserted between adjacent panels.
+    gap_image = np.zeros(
+        (image_height, gap, 3),
+        dtype=np.uint8,
+    )
+
     input_files = sorted(os.listdir(input_dir))
-    for input_file in tqdm(input_files, desc="Processing input files", total=len(input_files)):        
-        # Load the original image
-        input_image = Image.open(os.path.join(input_dir, input_file))
-        input_image = input_image.resize(img_original_size, Image.BILINEAR)
-        
-        target_file = os.path.join(target_dir, os.path.basename(input_file).replace('input', 'target'))
-        target_image = Image.open(target_file)
-        target_image = target_image.resize(img_original_size, Image.BILINEAR)
-        target_image = np.array(target_image)
-        
-        # Cmap the target image
-        ## First, map the target image to the temporary ios_point_mapper_to_cocoStuff_custom_11_dict
-        # target_image_new = np.zeros_like(target_image, dtype=np.uint8)
-        # for key, value in ios_point_mapper_to_cocoStuff_custom_11_dict.items():
-        #     target_image_new[target_image == key] = value
-        # target_image = target_image_new
-        target_image_colored = cmap[target_image].astype(np.uint8)  # shape: [H, W, 3]
 
-        # Initialize a blank canvas for the fused segmentation
-        fused_segmentation = np.zeros((img_original_size[1], img_original_size[0] * 3, len(pred_dirs)), dtype=np.uint8)
+    for input_file in tqdm(
+        input_files,
+        desc="Processing input files",
+        total=len(input_files),
+    ):
+        input_path = os.path.join(input_dir, input_file)
 
-        # Process each prediction directory
+        if not os.path.isfile(input_path):
+            continue
+
+        # Load the original RGB image.
+        input_image = Image.open(input_path).convert("RGB")
+        input_image = input_image.resize(
+            img_original_size,
+            Image.Resampling.BILINEAR,
+        )
+        input_image_array = np.asarray(input_image, dtype=np.uint8)
+
+        # Load and color the ground-truth mask.
+        target_filename = os.path.basename(input_file).replace(
+            "input",
+            "target",
+        )
+        target_path = os.path.join(target_dir, target_filename)
+
+        if not os.path.exists(target_path):
+            print_warning_message(
+                f"Target file {target_path} does not exist. Skipping."
+            )
+            continue
+
+        target_image = Image.open(target_path)
+        target_image = target_image.resize(
+            img_original_size,
+            Image.Resampling.NEAREST,
+        )
+        target_mask = np.asarray(target_image)
+
+        target_image_colored = cmap[target_mask].astype(np.uint8)
+
+        # Each element becomes one panel in the final image.
+        panels = [
+            input_image_array,
+            target_image_colored,
+        ]
+
         for pred_dir in pred_dirs:
-            pred_file_path = os.path.join(pred_dir, os.path.basename(input_file).replace('input', 'pred'))
+            pred_filename = os.path.basename(input_file).replace(
+                "input",
+                "pred",
+            )
+            pred_file_path = os.path.join(pred_dir, pred_filename)
+
             if not os.path.exists(pred_file_path):
-                print_warning_message(f"Prediction file {pred_file_path} does not exist. Skipping.")
-                continue
-            
-            # Load the predicted mask
-            pred_mask = Image.open(pred_file_path)  # shape: [H, W]
-            pred_mask = pred_mask.resize(img_original_size, Image.BILINEAR)
-            pred_mask = np.array(pred_mask)
-            
-            # Cmap the predicted mask to the number of classes
-            ## Temp code to handle cityscapes
-            if 'city' in pred_file_path:
-                pred_mask_colored = cityscapes_cmap[pred_mask].astype(np.uint8)  # shape: [H, W, 3]
+                print_warning_message(
+                    f"Prediction file {pred_file_path} does not exist. "
+                    "Using a blank panel."
+                )
+
+                pred_mask_colored = np.zeros(
+                    (image_height, image_width, 3),
+                    dtype=np.uint8,
+                )
             else:
-                pred_mask_colored = cmap[pred_mask].astype(np.uint8)  # shape: [H, W, 3]
+                pred_mask = Image.open(pred_file_path)
+                pred_mask = pred_mask.resize(
+                    img_original_size,
+                    Image.Resampling.NEAREST,
+                )
+                pred_mask = np.asarray(pred_mask)
 
-            # Place the predicted mask in the correct col of the fused segmentation
-            col_index = pred_dirs.index(pred_dir)
-            fused_segmentation[:, col_index * img_original_size[0]:(col_index + 1) * img_original_size[0], :] = pred_mask_colored
-            
+                if "city" in pred_file_path.lower():
+                    pred_mask_colored = cityscapes_cmap[pred_mask].astype(
+                        np.uint8
+                    )
+                else:
+                    pred_mask_colored = cmap[pred_mask].astype(np.uint8)
 
-        # Stack the input image, target image, and fused segmentation vertically
-        stacked_image = np.hstack((np.array(input_image), target_image_colored, fused_segmentation))
+            panels.append(pred_mask_colored)
+
+        # Insert a gap image between each pair of panels.
+        panels_with_gaps = []
+
+        for panel_index, panel in enumerate(panels):
+            if panel_index > 0 and gap > 0:
+                panels_with_gaps.append(gap_image)
+
+            panels_with_gaps.append(panel)
+
+        stacked_image = np.hstack(panels_with_gaps)
         stacked_image_pil = Image.fromarray(stacked_image)
-        
-        # Save the stacked image
-        output_file = os.path.join(output_dir, os.path.basename(input_file))
+
+        output_file = os.path.join(
+            output_dir,
+            os.path.basename(input_file),
+        )
         stacked_image_pil.save(output_file)
-        print_info_message(f"Saved fused segmentation image: {output_file}")
+
+        print_info_message(
+            f"Saved fused segmentation image: {output_file}"
+        )
 
 def save_entropy_maps(results_test: ResultsTest, target_dataset: tuple[str, list[str]], output_dir: str) -> None:
     """
